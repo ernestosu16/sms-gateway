@@ -14,13 +14,14 @@ import (
 	"github.com/mattboston/sms-gateway/internal/config"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/webhook"
 	httpSwagger "github.com/swaggo/http-swagger"
 
 	_ "github.com/mattboston/sms-gateway/docs" // register swagger docs
 )
 
 // NewRouter creates and configures the chi router with all middleware and routes.
-func NewRouter(repo *database.Repository, m modem.Modem, cfg *config.Config) chi.Router {
+func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispatcher, cfg *config.Config) chi.Router {
 	r := chi.NewRouter()
 
 	// Standard middleware.
@@ -44,10 +45,11 @@ func NewRouter(repo *database.Repository, m modem.Modem, cfg *config.Config) chi
 
 	// Handlers.
 	authHandler := NewAuthHandler(repo, cfg.JWTSecret)
-	smsHandler := NewSMSHandler(repo, m)
+	smsHandler := NewSMSHandler(repo, m, webhooks)
 	apiKeyHandler := NewKeyHandler(repo)
 	modemHandler := NewModemHandler(m)
 	userHandler := NewUserHandler(repo)
+	webhookHandler := NewWebhookHandler(repo)
 	healthHandler := NewHealthHandler(repo, m)
 
 	// Auth middleware shortcuts.
@@ -95,6 +97,10 @@ func NewRouter(repo *database.Repository, m modem.Modem, cfg *config.Config) chi
 		r.Post("/api/v1/modem/at", modemHandler.HandleSendATCommand)
 		r.Get("/api/v1/users", userHandler.HandleListUsers)
 		r.Post("/api/v1/users", userHandler.HandleCreateUser)
+		r.Get("/api/v1/webhooks", webhookHandler.HandleListWebhooks)
+		r.Post("/api/v1/webhooks", webhookHandler.HandleCreateWebhook)
+		r.Put("/api/v1/webhooks/{id}", webhookHandler.HandleUpdateWebhook)
+		r.Delete("/api/v1/webhooks/{id}", webhookHandler.HandleDeleteWebhook)
 	})
 
 	// Swagger UI.
