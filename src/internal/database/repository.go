@@ -256,30 +256,50 @@ func (r *Repository) CountAPIKeys(userID string) (int, error) {
 	return total, nil
 }
 
-// DeactivateAPIKey marks an API key as inactive.
-func (r *Repository) DeactivateAPIKey(id string) error {
+// apiKeyByIDFilter builds the WHERE clause that selects one API key for an
+// update or delete. A non-empty userID also requires that user to own the key,
+// so a caller acting for a non-admin cannot touch anyone else's keys; an empty
+// userID matches any owner.
+func apiKeyByIDFilter(id, userID string) (string, []any) {
+	if userID == "" {
+		return ` WHERE id = ?`, []any{id}
+	}
+	return ` WHERE id = ? AND user_id = ?`, []any{id, userID}
+}
+
+// DeactivateAPIKey marks an API key as inactive. userID scopes the change as
+// in apiKeyByIDFilter. The error wraps sql.ErrNoRows when no matching key
+// exists.
+func (r *Repository) DeactivateAPIKey(id, userID string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := r.db.Exec(
-		`UPDATE api_keys SET is_active = 0, updated_at = ? WHERE id = ?`, now, id,
-	)
+	where, args := apiKeyByIDFilter(id, userID)
+	result, err := r.db.Exec(`UPDATE api_keys SET is_active = 0, updated_at = ?`+where, append([]any{now}, args...)...)
 	if err != nil {
 		return fmt.Errorf("deactivating API key: %w", err)
 	}
-	return nil
+	return requireRowAffected(result, "deactivating API key")
 }
 
-// DeleteAPIKey permanently removes an API key by ID.
-func (r *Repository) DeleteAPIKey(id string) error {
-	result, err := r.db.Exec(`DELETE FROM api_keys WHERE id = ?`, id)
+// DeleteAPIKey permanently removes an API key. userID scopes the change as in
+// apiKeyByIDFilter. The error wraps sql.ErrNoRows when no matching key exists.
+func (r *Repository) DeleteAPIKey(id, userID string) error {
+	where, args := apiKeyByIDFilter(id, userID)
+	result, err := r.db.Exec(`DELETE FROM api_keys`+where, args...)
 	if err != nil {
 		return fmt.Errorf("deleting API key: %w", err)
 	}
+	return requireRowAffected(result, "deleting API key")
+}
+
+// requireRowAffected returns an error wrapping sql.ErrNoRows when result
+// changed no rows.
+func requireRowAffected(result sql.Result, action string) error {
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("checking rows affected: %w", err)
+		return fmt.Errorf("%s: checking rows affected: %w", action, err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("API key not found")
+		return fmt.Errorf("%s: %w", action, sql.ErrNoRows)
 	}
 	return nil
 }

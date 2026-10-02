@@ -327,7 +327,8 @@ paths:
       - API Keys
   /api/v1/apikeys/{id}:
     delete:
-      description: Deactivates an API key by its unique identifier.
+      description: Deactivates an API key by its unique identifier. Non-admins can
+        only deactivate their own keys.
       parameters:
       - description: API Key ID
         in: path
@@ -347,6 +348,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -358,7 +367,8 @@ paths:
       - API Keys
   /api/v1/apikeys/{id}/delete:
     delete:
-      description: Permanently deletes an API key by its unique identifier.
+      description: Permanently deletes an API key by its unique identifier. Non-admins
+        can only delete their own keys.
       parameters:
       - description: API Key ID
         in: path
@@ -378,8 +388,16 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:

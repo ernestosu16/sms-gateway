@@ -184,7 +184,7 @@ func TestDeactivateAPIKey(t *testing.T) {
 	user, _ := repo.CreateUser("keyuser3", "hash", false, false)
 	key, _ := repo.CreateAPIKey("deactivateme", "label", user.ID)
 
-	err := repo.DeactivateAPIKey(key.ID)
+	err := repo.DeactivateAPIKey(key.ID, "")
 	if err != nil {
 		t.Fatalf("DeactivateAPIKey() error = %v", err)
 	}
@@ -193,6 +193,34 @@ func TestDeactivateAPIKey(t *testing.T) {
 	_, err = repo.GetAPIKeyByKey("deactivateme")
 	if err == nil {
 		t.Error("GetAPIKeyByKey() should fail for deactivated key")
+	}
+}
+
+func TestAPIKeyChangesAreScopedToOwner(t *testing.T) {
+	repo := setupTestDB(t)
+
+	owner, _ := repo.CreateUser("keyowner", "hash", false, false)
+	other, _ := repo.CreateUser("keyother", "hash", false, false)
+	key, _ := repo.CreateAPIKey("scopedkey", "label", owner.ID)
+
+	if err := repo.DeactivateAPIKey(key.ID, other.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeactivateAPIKey() by another user error = %v, want sql.ErrNoRows", err)
+	}
+	if err := repo.DeleteAPIKey(key.ID, other.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeleteAPIKey() by another user error = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := repo.GetAPIKeyByKey("scopedkey"); err != nil {
+		t.Fatalf("key should still be active after another user's attempts: %v", err)
+	}
+
+	if err := repo.DeactivateAPIKey(key.ID, owner.ID); err != nil {
+		t.Fatalf("DeactivateAPIKey() by owner error = %v", err)
+	}
+	if err := repo.DeleteAPIKey(key.ID, owner.ID); err != nil {
+		t.Fatalf("DeleteAPIKey() by owner error = %v", err)
+	}
+	if err := repo.DeleteAPIKey(key.ID, ""); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeleteAPIKey() of a deleted key error = %v, want sql.ErrNoRows", err)
 	}
 }
 

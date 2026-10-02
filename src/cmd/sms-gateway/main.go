@@ -360,7 +360,7 @@ func apikeyCmd() *cobra.Command {
 			}
 			defer cleanup()
 
-			if err := repo.DeactivateAPIKey(id); err != nil {
+			if err := repo.DeactivateAPIKey(id, ""); err != nil {
 				return fmt.Errorf("revoking API key: %w", err)
 			}
 
