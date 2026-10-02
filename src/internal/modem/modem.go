@@ -199,13 +199,13 @@ func (m *SerialModem) StartReceiver(ctx context.Context, callback func(from, bod
 				return
 			case <-ticker.C:
 				m.mu.Lock()
-				resp, err := sendCommand(m.port, ATListUnreadSMS, 5*time.Second)
+				messages, err := m.listUnread()
 				m.mu.Unlock()
 				if err != nil {
+					log.Printf("Failed to list unread SMS: %v", err)
 					continue
 				}
 
-				messages := parseSMSList(resp)
 				for _, msg := range messages {
 					if err := callback(msg.From, msg.Body); err != nil {
 						log.Printf("Failed to process SMS from %s (SIM index %d): %v", msg.From, msg.Index, err)
@@ -223,6 +223,26 @@ func (m *SerialModem) StartReceiver(ctx context.Context, callback func(from, bod
 			}
 		}
 	}()
+}
+
+// listUnread returns the unread SMS on the SIM. It reads them in PDU mode (see
+// parsePDUList) and switches back to text mode before returning, because
+// SendSMS relies on it. The caller must hold m.mu.
+func (m *SerialModem) listUnread() ([]ParsedSMS, error) {
+	if _, err := sendCommand(m.port, ATSetPDUMode, 2*time.Second); err != nil {
+		return nil, fmt.Errorf("switching to PDU mode: %w", err)
+	}
+
+	resp, err := sendCommand(m.port, ATListUnreadPDU, 5*time.Second)
+
+	if _, restoreErr := sendCommand(m.port, ATSetTextMode, 2*time.Second); restoreErr != nil {
+		log.Printf("Warning: failed to restore SMS text mode: %v", restoreErr)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("listing unread SMS: %w", err)
+	}
+	return parsePDUList(resp), nil
 }
 
 // Close closes the serial port connection.

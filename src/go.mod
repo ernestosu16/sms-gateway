@@ -13,6 +13,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.6
+	github.com/warthog618/sms v0.3.0
 	go.bug.st/serial v1.6.4
 	golang.org/x/crypto v0.52.0
 	modernc.org/sqlite v1.33.1

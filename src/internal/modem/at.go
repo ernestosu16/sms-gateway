@@ -2,11 +2,15 @@ package modem
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
 
+	"github.com/warthog618/sms"
+	"github.com/warthog618/sms/encoding/pdumode"
+	"github.com/warthog618/sms/encoding/tpdu"
 	"go.bug.st/serial"
 )
 
@@ -16,7 +20,8 @@ const (
 	ATSetTextMode    = "AT+CMGF=1"
 	ATSignalQuality  = "AT+CSQ"
 	ATSendSMS        = "AT+CMGS="
-	ATListUnreadSMS  = "AT+CMGL=\"REC UNREAD\""
+	ATSetPDUMode     = "AT+CMGF=0"
+	ATListUnreadPDU  = "AT+CMGL=0" // stat 0 = received unread, PDU mode
 	ATListAllSMS     = "AT+CMGL=\"ALL\""
 	ATDeleteReadSMS  = "AT+CMGD=1,1"
 	ATSetCharsetGSM  = "AT+CSCS=\"GSM\""
@@ -267,11 +272,18 @@ func encodeUCS2(s string) string {
 	return b.String()
 }
 
-// parseSMSList parses an AT+CMGL response into individual messages.
+// parsePDUList parses an AT+CMGL response given in PDU mode into messages.
 // Response format:
-// +CMGL: <index>,"<status>","<from>",,"<timestamp>"
-// <body>
-func parseSMSList(resp string) []ParsedSMS {
+// +CMGL: <index>,<stat>,[<alpha>],<length>
+// <hex PDU>
+//
+// PDU mode is used for reading because in text mode the body is printed raw
+// between headers: an SMS containing a line that starts with "+CMGL:" would be
+// parsed as a second message with a forged sender and SIM index. Here the body
+// travels hex-encoded inside the PDU, so headers can only come from the modem.
+// Entries that are not a decodable SMS-DELIVER are logged and skipped, which
+// leaves them on the SIM.
+func parsePDUList(resp string) []ParsedSMS {
 	var messages []ParsedSMS
 	lines := strings.Split(resp, "\n")
 
@@ -281,38 +293,42 @@ func parseSMSList(resp string) []ParsedSMS {
 			continue
 		}
 
-		// Parse the header line to extract index and sender.
-		// Format: +CMGL: <index>,"<status>","<from>",...
-		parts := strings.SplitN(line, ",", 5)
-		if len(parts) < 3 {
+		fields := strings.SplitN(strings.TrimPrefix(line, "+CMGL:"), ",", 2)
+		index, err := strconv.Atoi(strings.TrimSpace(fields[0]))
+		if err != nil || i+1 >= len(lines) {
 			continue
 		}
-		indexStr := strings.TrimSpace(strings.TrimPrefix(parts[0], "+CMGL:"))
-		index, err := strconv.Atoi(indexStr)
+		i++
+
+		from, body, err := decodeDeliverPDU(strings.TrimSpace(lines[i]))
 		if err != nil {
+			log.Printf("Skipping SMS at SIM index %d: %v", index, err)
 			continue
 		}
-		from := strings.Trim(parts[2], "\" ")
-
-		// Collect body lines until the next +CMGL header, OK, or end.
-		var bodyLines []string
-		for i+1 < len(lines) {
-			nextLine := strings.TrimSpace(lines[i+1])
-			if nextLine == "" || nextLine == "OK" || strings.HasPrefix(nextLine, "+CMGL:") {
-				break
-			}
-			bodyLines = append(bodyLines, nextLine)
-			i++
-		}
-
-		if len(bodyLines) > 0 {
-			messages = append(messages, ParsedSMS{
-				Index: index,
-				From:  from,
-				Body:  strings.Join(bodyLines, "\n"),
-			})
-		}
+		messages = append(messages, ParsedSMS{Index: index, From: from, Body: body})
 	}
 
 	return messages
+}
+
+// decodeDeliverPDU decodes a hex PDU (SMSC address followed by the TPDU) and
+// returns the sender and text of an SMS-DELIVER. Each part of a concatenated
+// message is decoded on its own, as text mode did.
+func decodeDeliverPDU(hexPDU string) (from, body string, err error) {
+	p, err := pdumode.UnmarshalHexString(hexPDU)
+	if err != nil {
+		return "", "", fmt.Errorf("decoding PDU: %w", err)
+	}
+	t, err := sms.Unmarshal(p.TPDU, sms.AsMT)
+	if err != nil {
+		return "", "", fmt.Errorf("decoding TPDU: %w", err)
+	}
+	if t.SmsType() != tpdu.SmsDeliver {
+		return "", "", fmt.Errorf("unexpected TPDU type %v", t.SmsType())
+	}
+	text, err := sms.Decode([]*tpdu.TPDU{t})
+	if err != nil {
+		return "", "", fmt.Errorf("decoding user data: %w", err)
+	}
+	return t.OA.Number(), string(text), nil
 }
