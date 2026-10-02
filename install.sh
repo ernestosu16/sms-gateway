@@ -134,6 +134,10 @@ install_systemd() {
     info "Upgrade mode: skipping config prompts"
   fi
 
+  # sms-gateway refuses to start with a shorter secret.
+  if [ -n "$jwt_secret" ] && [ "${#jwt_secret}" -lt 32 ]; then
+    fatal "JWT secret must be at least 32 characters (leave blank to auto-generate)"
+  fi
   if [ -z "$jwt_secret" ]; then
     if command -v openssl >/dev/null 2>&1; then
       jwt_secret="$(openssl rand -base64 32)"
@@ -183,6 +187,11 @@ install_systemd() {
   local config_file="${INSTALL_DIR}/sms-gateway.conf"
   if [ -f "$config_file" ]; then
     info "Config file already exists, preserving: $config_file"
+    local existing_secret
+    existing_secret="$(sed -n 's/^JWT_SECRET=//p' "$config_file" | tail -n 1)"
+    if [ "${#existing_secret}" -lt 32 ]; then
+      warn "JWT_SECRET in $config_file is shorter than 32 characters; sms-gateway will not start until you replace it (e.g. openssl rand -base64 32)"
+    fi
   else
     if [ "$mode" = "upgrade" ]; then
       warn "Config file missing during upgrade; creating default config: $config_file"

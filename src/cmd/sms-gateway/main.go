@@ -92,6 +92,9 @@ func serveCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
+			if err := cfg.RequireJWTSecret(); err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
 
 			// Open database.
 			db, err := database.New(cfg.DBDriver, cfg.DBDSN)

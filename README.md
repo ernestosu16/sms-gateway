@@ -149,8 +149,10 @@ sudo systemctl enable --now sms-gateway
 
 ```bash
 chmod +x sms-gateway-linux-amd64
-./sms-gateway-linux-amd64 serve --device-path /dev/ttyUSB0 --jwt-secret your-secret
+./sms-gateway-linux-amd64 serve --device-path /dev/ttyUSB0 --jwt-secret "$JWT_SECRET"
 ```
+
+`JWT_SECRET` must be at least 32 characters; generate it once with `openssl rand -base64 32` and keep it, since changing it signs everyone out.
 
 ### From Source
 
@@ -165,7 +167,7 @@ just build
 just dev
 
 # Run (production with real modem)
-./bin/sms-gateway serve --device-path /dev/ttyUSB0 --jwt-secret your-secret
+./bin/sms-gateway serve --device-path /dev/ttyUSB0 --jwt-secret "$JWT_SECRET"
 ```
 
 ### Docker Compose
@@ -182,7 +184,7 @@ The included `docker-compose.yml` pulls the published GHCR image by default, pas
 Minimal example:
 
 ```bash
-JWT_SECRET=replace-me \
+grep -q '^JWT_SECRET=' .env 2>/dev/null || echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env
 DEVICE_PATH=/dev/ttyUSB0 \
 IMAGE_VERSION=latest \
 docker compose up -d
@@ -190,6 +192,7 @@ docker compose up -d
 
 Important notes:
 
+- `JWT_SECRET` is required: Compose refuses to start without it. Keeping it in `.env` gives every `docker compose` command the same value.
 - Released container images are published to `ghcr.io/mattboston/sms-gateway` and tagged with the same version string as the release binaries.
 - Set `IMAGE_VERSION` to a release tag such as `0.0.1`, or leave it at `latest`.
 - `DEVICE_PATH` should point at the modem node on the host, for example `/dev/ttyUSB0`.
@@ -271,7 +274,7 @@ Configuration is done via a config file, CLI flags, or environment variables.
 | `--config-file` | `CONFIG_FILE` | `/opt/sms-gateway/sms-gateway.conf` | Path to config file |
 | `--device-path` | `DEVICE_PATH` | | Serial device path (e.g., `/dev/ttyUSB0`) |
 | `--baud-rate` | `BAUD_RATE` | `9600` | Serial baud rate |
-| `--jwt-secret` | `JWT_SECRET` | `change-me-in-production` | JWT signing secret |
+| `--jwt-secret` | `JWT_SECRET` | (required) | JWT signing secret, at least 32 characters. Dev mode generates a random one when unset |
 | `--dev-mode` | `DEV_MODE` | `false` | Enable dev mode (mock modem, CORS) |
 
 ## CLI Commands
