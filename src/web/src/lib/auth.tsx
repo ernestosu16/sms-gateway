@@ -13,7 +13,7 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  clearMustChangePassword: () => void;
+  completePasswordChange: (newToken: string) => void;
   isAuthenticated: boolean;
   mustChangePassword: boolean;
 }
@@ -40,19 +40,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Revoke the token server-side. The header is set explicitly because the
+    // stored token is cleared below, before the request interceptor runs.
+    const current = localStorage.getItem('token');
+    if (current) {
+      api
+        .post('/auth/logout', null, { headers: { Authorization: `Bearer ${current}` } })
+        .catch(() => {});
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
   }, []);
 
-  const clearMustChangePassword = useCallback(() => {
-    if (user) {
-      const updated = { ...user, must_change_password: false };
-      localStorage.setItem('user', JSON.stringify(updated));
-      setUser(updated);
-    }
-  }, [user]);
+  // A password change revokes every earlier token, so the one the API returns
+  // replaces ours.
+  const completePasswordChange = useCallback(
+    (newToken: string) => {
+      localStorage.setItem('token', newToken);
+      setToken(newToken);
+      if (user) {
+        const updated = { ...user, must_change_password: false };
+        localStorage.setItem('user', JSON.stringify(updated));
+        setUser(updated);
+      }
+    },
+    [user],
+  );
 
   return (
     <AuthContext.Provider
@@ -61,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         login,
         logout,
-        clearMustChangePassword,
+        completePasswordChange,
         isAuthenticated: !!token,
         mustChangePassword: user?.must_change_password ?? false,
       }}

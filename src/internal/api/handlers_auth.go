@@ -85,20 +85,11 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	h.throttle.reset(req.Username)
 
-	token, err := auth.GenerateJWT(h.jwtSecret, user.ID, user.IsAdmin)
+	token, err := auth.GenerateJWT(h.jwtSecret, user.ID, user.IsAdmin, user.TokenVersion)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to generate token"})
 		return
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   int(24 * time.Hour / time.Second),
-	})
 
 	writeJSON(w, http.StatusOK, models.LoginResponse{
 		Token: token,
@@ -106,24 +97,28 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleLogout clears the authentication cookie.
+// HandleLogout revokes the caller's tokens.
 //
 // @Summary      User logout
-// @Description  Clears the authentication cookie, logging the user out.
+// @Description  Revokes every token issued to the authenticated user, logging them out on all devices.
 // @Tags         Auth
 // @Produce      json
 // @Success      200  {object}  map[string]string  "message: logged out"
+// @Failure      401  {object}  models.ErrorResponse
+// @Failure      500  {object}  models.ErrorResponse
 // @Security     BearerAuth
 // @Router       /api/v1/auth/logout [post]
-func (h *AuthHandler) HandleLogout(w http.ResponseWriter, _ *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   -1,
-	})
+func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	claims := GetUserFromContext(r.Context())
+	if claims == nil {
+		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+		return
+	}
+
+	if err := h.repo.RevokeTokens(claims.UserID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to log out"})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
@@ -131,12 +126,12 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, _ *http.Request) {
 // HandleChangePassword allows an authenticated user to change their password.
 //
 // @Summary      Change password
-// @Description  Allows an authenticated user to change their password by providing the current and new passwords.
+// @Description  Allows an authenticated user to change their password by providing the current and new passwords. Every existing token is revoked; the response carries a new one for the caller.
 // @Tags         Auth
 // @Accept       json
 // @Produce      json
 // @Param        request  body      models.ChangePasswordRequest  true  "Current and new password"
-// @Success      200      {object}  map[string]string             "message: password updated"
+// @Success      200      {object}  models.ChangePasswordResponse
 // @Failure      400      {object}  models.ErrorResponse
 // @Failure      401      {object}  models.ErrorResponse
 // @Failure      500      {object}  models.ErrorResponse
@@ -186,5 +181,18 @@ func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+	// UpdatePassword revoked every token, including the caller's, so issue the
+	// caller a fresh one at the new token version.
+	user, err = h.repo.GetUserByID(user.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to get user"})
+		return
+	}
+	token, err := auth.GenerateJWT(h.jwtSecret, user.ID, user.IsAdmin, user.TokenVersion)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to generate token"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, models.ChangePasswordResponse{Message: "password updated", Token: token})
 }

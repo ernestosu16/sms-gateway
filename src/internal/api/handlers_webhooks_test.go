@@ -213,7 +213,7 @@ func TestWebhookRoutes_RequireAdmin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("CreateUser() error = %v", err)
 			}
-			token, err := auth.GenerateJWT(cfg.JWTSecret, user.ID, tt.isAdmin)
+			token, err := auth.GenerateJWT(cfg.JWTSecret, user.ID, tt.isAdmin, user.TokenVersion)
 			if err != nil {
 				t.Fatalf("GenerateJWT() error = %v", err)
 			}

@@ -224,6 +224,29 @@ func TestAPIKeyChangesAreScopedToOwner(t *testing.T) {
 	}
 }
 
+func TestPasswordChangesAndRevokeBumpTokenVersion(t *testing.T) {
+	repo := setupTestDB(t)
+	user, _ := repo.CreateUser("versioned", "hash", false, false)
+	if user.TokenVersion != 0 {
+		t.Fatalf("new user TokenVersion = %d, want 0", user.TokenVersion)
+	}
+
+	steps := []func() error{
+		func() error { return repo.UpdatePassword(user.ID, "hash2") },
+		func() error { return repo.ResetPassword(user.ID, "hash3") },
+		func() error { return repo.RevokeTokens(user.ID) },
+	}
+	for i, step := range steps {
+		if err := step(); err != nil {
+			t.Fatalf("step %d error = %v", i, err)
+		}
+		got, _ := repo.GetUserByID(user.ID)
+		if got.TokenVersion != i+1 {
+			t.Errorf("after step %d TokenVersion = %d, want %d", i, got.TokenVersion, i+1)
+		}
+	}
+}
+
 func TestListAPIKeys(t *testing.T) {
 	repo := setupTestDB(t)
 

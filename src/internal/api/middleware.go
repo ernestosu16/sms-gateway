@@ -19,7 +19,7 @@ const (
 	contextKeyAPIKey contextKey = "apikey"
 )
 
-// AuthMiddleware validates JWT tokens from the Authorization header or a cookie.
+// AuthMiddleware validates JWT tokens from the Authorization header.
 // Users who still have to change their password are refused, so a default or
 // leaked password is only good for choosing a new one.
 func AuthMiddleware(jwtSecret string, repo *database.Repository) func(http.Handler) http.Handler {
@@ -55,7 +55,7 @@ func jwtMiddleware(jwtSecret string, repo *database.Repository, allowPendingPass
 
 // authenticateJWT validates tokenStr and loads its user. On success it returns
 // the claims with IsAdmin taken from the database, so a token cannot outlive
-// its user or keep privileges the user no longer has. Otherwise it returns nil
+// its user, a logout or password change, or privileges the user no longer has. Otherwise it returns nil
 // with the status and message to answer.
 func authenticateJWT(jwtSecret string, repo *database.Repository, tokenStr string, allowPendingPasswordChange bool) (*auth.JWTClaims, int, string) {
 	claims, err := auth.ValidateJWT(jwtSecret, tokenStr)
@@ -69,6 +69,9 @@ func authenticateJWT(jwtSecret string, repo *database.Repository, tokenStr strin
 	}
 	if err != nil {
 		return nil, http.StatusInternalServerError, "failed to load user"
+	}
+	if claims.TokenVersion != user.TokenVersion {
+		return nil, http.StatusUnauthorized, "token revoked"
 	}
 	if user.MustChangePassword && !allowPendingPasswordChange {
 		return nil, http.StatusForbidden, "password change required"
@@ -159,17 +162,11 @@ func GetAPIKeyFromContext(ctx context.Context) *models.APIKey {
 }
 
 func extractJWT(r *http.Request) string {
-	// Check Authorization header.
-	if header := r.Header.Get("Authorization"); header != "" {
-		if strings.HasPrefix(header, "Bearer ") {
-			return strings.TrimPrefix(header, "Bearer ")
-		}
+	// Only the Authorization header is accepted. A cookie would be sent by the
+	// browser on its own, which needs CSRF protection and outlives a logout
+	// that only clears the web UI's stored token.
+	if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+		return strings.TrimPrefix(header, "Bearer ")
 	}
-
-	// Check cookie.
-	if cookie, err := r.Cookie("token"); err == nil {
-		return cookie.Value
-	}
-
 	return ""
 }

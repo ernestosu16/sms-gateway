@@ -92,13 +92,14 @@ func (r *Repository) SeedDefaultAdmin(passwordHash string) (bool, error) {
 	return true, nil
 }
 
-// UpdatePassword updates a user's password and clears the must_change_password flag.
+// UpdatePassword updates a user's password, clears the must_change_password
+// flag and revokes the user's existing tokens.
 func (r *Repository) UpdatePassword(userID, passwordHash string) error {
 	return r.setPassword(userID, passwordHash, false)
 }
 
 // ResetPassword replaces a user's password with one they must change on their
-// next login.
+// next login and revokes the user's existing tokens.
 func (r *Repository) ResetPassword(userID, passwordHash string) error {
 	return r.setPassword(userID, passwordHash, true)
 }
@@ -106,7 +107,7 @@ func (r *Repository) ResetPassword(userID, passwordHash string) error {
 func (r *Repository) setPassword(userID, passwordHash string, mustChange bool) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := r.db.Exec(
-		`UPDATE users SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ?`,
+		`UPDATE users SET password_hash = ?, must_change_password = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?`,
 		passwordHash, boolToInt(mustChange), now, userID,
 	)
 	if err != nil {
@@ -115,10 +116,21 @@ func (r *Repository) setPassword(userID, passwordHash string, mustChange bool) e
 	return nil
 }
 
+// RevokeTokens invalidates every token issued to a user so far.
+func (r *Repository) RevokeTokens(userID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := r.db.Exec(
+		`UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?`, now, userID,
+	); err != nil {
+		return fmt.Errorf("revoking tokens: %w", err)
+	}
+	return nil
+}
+
 // GetUserByID retrieves a user by their ID.
 func (r *Repository) GetUserByID(id string) (*models.User, error) {
 	row := r.db.QueryRow(
-		`SELECT id, username, password_hash, is_admin, must_change_password, created_at, updated_at
+		`SELECT id, username, password_hash, is_admin, must_change_password, token_version, created_at, updated_at
 		 FROM users WHERE id = ?`, id,
 	)
 	return scanUser(row)
@@ -127,7 +139,7 @@ func (r *Repository) GetUserByID(id string) (*models.User, error) {
 // GetUserByUsername retrieves a user by their username.
 func (r *Repository) GetUserByUsername(username string) (*models.User, error) {
 	row := r.db.QueryRow(
-		`SELECT id, username, password_hash, is_admin, must_change_password, created_at, updated_at
+		`SELECT id, username, password_hash, is_admin, must_change_password, token_version, created_at, updated_at
 		 FROM users WHERE username = ?`, username,
 	)
 	return scanUser(row)
@@ -138,7 +150,7 @@ func (r *Repository) ListUsers(opts ListOptions) ([]models.User, error) {
 	// id breaks created_at ties for the same reason it does for messages: the
 	// column has second granularity, so paging needs a stable total order.
 	query, args := applyPagination(
-		`SELECT id, username, password_hash, is_admin, must_change_password, created_at, updated_at
+		`SELECT id, username, password_hash, is_admin, must_change_password, token_version, created_at, updated_at
 		 FROM users ORDER BY created_at DESC, id DESC`,
 		nil, opts,
 	)
@@ -647,7 +659,7 @@ func scanUser(s scannable) (*models.User, error) {
 	var u models.User
 	var isAdmin, mustChangePassword int
 	var createdAt, updatedAt string
-	err := s.Scan(&u.ID, &u.Username, &u.PasswordHash, &isAdmin, &mustChangePassword, &createdAt, &updatedAt)
+	err := s.Scan(&u.ID, &u.Username, &u.PasswordHash, &isAdmin, &mustChangePassword, &u.TokenVersion, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scanning user: %w", err)
 	}

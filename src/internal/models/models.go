@@ -29,6 +29,7 @@ type User struct {
 	PasswordHash       string    `json:"-"`
 	IsAdmin            bool      `json:"is_admin"`
 	MustChangePassword bool      `json:"must_change_password"`
+	TokenVersion       int       `json:"-"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -192,6 +193,13 @@ type ATCommandResponse struct {
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
+}
+
+// ChangePasswordResponse is the response body after changing a password. Token
+// replaces the caller's token, which the change revoked.
+type ChangePasswordResponse struct {
+	Message string `json:"message"`
+	Token   string `json:"token"`
 }
 
 // ErrorResponse represents an API error.

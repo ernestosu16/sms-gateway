@@ -34,7 +34,7 @@ func TestCheckPassword(t *testing.T) {
 
 func TestGenerateJWT(t *testing.T) {
 	secret := "test-secret"
-	token, err := GenerateJWT(secret, "user-123", true)
+	token, err := GenerateJWT(secret, "user-123", true, 0)
 	if err != nil {
 		t.Fatalf("GenerateJWT() error = %v", err)
 	}
@@ -45,7 +45,7 @@ func TestGenerateJWT(t *testing.T) {
 
 func TestValidateJWT(t *testing.T) {
 	secret := "test-secret"
-	token, err := GenerateJWT(secret, "user-456", false)
+	token, err := GenerateJWT(secret, "user-456", false, 0)
 	if err != nil {
 		t.Fatalf("GenerateJWT() error = %v", err)
 	}
@@ -64,7 +64,7 @@ func TestValidateJWT(t *testing.T) {
 }
 
 func TestValidateJWT_WrongSecret(t *testing.T) {
-	token, _ := GenerateJWT("secret-1", "user-789", false)
+	token, _ := GenerateJWT("secret-1", "user-789", false, 0)
 
 	_, err := ValidateJWT("secret-2", token)
 	if err == nil {
