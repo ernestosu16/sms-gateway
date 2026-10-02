@@ -94,10 +94,20 @@ func (r *Repository) SeedDefaultAdmin(passwordHash string) (bool, error) {
 
 // UpdatePassword updates a user's password and clears the must_change_password flag.
 func (r *Repository) UpdatePassword(userID, passwordHash string) error {
+	return r.setPassword(userID, passwordHash, false)
+}
+
+// ResetPassword replaces a user's password with one they must change on their
+// next login.
+func (r *Repository) ResetPassword(userID, passwordHash string) error {
+	return r.setPassword(userID, passwordHash, true)
+}
+
+func (r *Repository) setPassword(userID, passwordHash string, mustChange bool) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := r.db.Exec(
-		`UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?`,
-		passwordHash, now, userID,
+		`UPDATE users SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ?`,
+		passwordHash, boolToInt(mustChange), now, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating password: %w", err)

@@ -1,8 +1,12 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/mattboston/sms-gateway/internal/auth"
@@ -10,15 +14,26 @@ import (
 	"github.com/mattboston/sms-gateway/internal/models"
 )
 
+// minPasswordLength is the shortest password the API accepts for new users and
+// password changes, matching the web UI.
+const minPasswordLength = 8
+
+var passwordTooShort = fmt.Sprintf("password must be at least %d characters", minPasswordLength)
+
+// dummyPasswordHash is checked when a login names an unknown user, so unknown
+// and existing usernames cost the same bcrypt time and cannot be told apart.
+var dummyPasswordHash, _ = auth.HashPassword("unknown-user-timing-equalizer")
+
 // AuthHandler handles authentication-related endpoints.
 type AuthHandler struct {
 	repo      *database.Repository
 	jwtSecret string
+	throttle  *loginThrottle
 }
 
 // NewAuthHandler creates a new AuthHandler.
 func NewAuthHandler(repo *database.Repository, jwtSecret string) *AuthHandler {
-	return &AuthHandler{repo: repo, jwtSecret: jwtSecret}
+	return &AuthHandler{repo: repo, jwtSecret: jwtSecret, throttle: newLoginThrottle(time.Now)}
 }
 
 // HandleLogin authenticates a user and returns a JWT token.
@@ -32,6 +47,7 @@ func NewAuthHandler(repo *database.Repository, jwtSecret string) *AuthHandler {
 // @Success      200      {object}  models.LoginResponse
 // @Failure      400      {object}  models.ErrorResponse
 // @Failure      401      {object}  models.ErrorResponse
+// @Failure      429      {object}  models.ErrorResponse
 // @Failure      500      {object}  models.ErrorResponse
 // @Router       /api/v1/auth/login [post]
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
@@ -46,16 +62,28 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.repo.GetUserByUsername(req.Username)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "invalid credentials"})
+	// Checked before the password so a blocked guess reveals nothing.
+	if wait := h.throttle.retryAfter(req.Username); wait > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second)/time.Second)))
+		writeJSON(w, http.StatusTooManyRequests, models.ErrorResponse{Error: "too many failed login attempts, try again later"})
 		return
 	}
 
-	if !auth.CheckPassword(req.Password, user.PasswordHash) {
+	user, err := h.repo.GetUserByUsername(req.Username)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to load user"})
+		return
+	}
+	hash := dummyPasswordHash
+	if user != nil {
+		hash = user.PasswordHash
+	}
+	if !auth.CheckPassword(req.Password, hash) || user == nil {
+		h.throttle.fail(req.Username)
 		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "invalid credentials"})
 		return
 	}
+	h.throttle.reset(req.Username)
 
 	token, err := auth.GenerateJWT(h.jwtSecret, user.ID, user.IsAdmin)
 	if err != nil {
@@ -129,6 +157,10 @@ func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Reques
 
 	if req.CurrentPassword == "" || req.NewPassword == "" {
 		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "current_password and new_password are required"})
+		return
+	}
+	if len(req.NewPassword) < minPasswordLength {
+		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: passwordTooShort})
 		return
 	}
 

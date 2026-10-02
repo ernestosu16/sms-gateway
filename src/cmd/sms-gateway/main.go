@@ -19,6 +19,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -111,18 +113,13 @@ func serveCmd() *cobra.Command {
 
 			repo := database.NewRepository(db)
 
-			// Seed default admin user if no users exist.
-			hash, err := auth.HashPassword("admin123")
+			password, err := prepareAdmin(repo)
 			if err != nil {
-				return fmt.Errorf("hashing default password: %w", err)
+				return fmt.Errorf("preparing admin user: %w", err)
 			}
-			seeded, err := repo.SeedDefaultAdmin(hash)
-			if err != nil {
-				return fmt.Errorf("seeding default admin: %w", err)
-			}
-			if seeded {
-				log.Println("Created default admin user (username: admin, password: admin123)")
-				log.Println("You will be required to change the password on first login.")
+			if password != "" {
+				log.Printf("Admin login: username admin, password %s", password)
+				log.Println("This password is shown only once; you will have to change it on first login.")
 			}
 
 			// Initialize modem.
@@ -204,6 +201,50 @@ func receiveSMS(repo *database.Repository, webhooks *webhook.Dispatcher) func(fr
 		webhooks.Dispatch(models.EventMessageReceived, msg)
 		return nil
 	}
+}
+
+// legacyAdminPassword is the fixed password earlier releases gave the seeded
+// admin account.
+const legacyAdminPassword = "admin123"
+
+// prepareAdmin keeps the admin account from being reachable with a well-known
+// password. With no users it creates "admin" with a random password; if the
+// admin still has the legacy password it never changed, that password is
+// replaced. It returns the new password, which must be shown to the operator,
+// or "" when nothing changed. Either way the admin must change it on first
+// login.
+func prepareAdmin(repo *database.Repository) (string, error) {
+	password, err := auth.GeneratePassword()
+	if err != nil {
+		return "", err
+	}
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return "", err
+	}
+
+	seeded, err := repo.SeedDefaultAdmin(hash)
+	if err != nil {
+		return "", err
+	}
+	if seeded {
+		return password, nil
+	}
+
+	admin, err := repo.GetUserByUsername("admin")
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !admin.MustChangePassword || !auth.CheckPassword(legacyAdminPassword, admin.PasswordHash) {
+		return "", nil
+	}
+	if err := repo.ResetPassword(admin.ID, hash); err != nil {
+		return "", err
+	}
+	return password, nil
 }
 
 // openDB loads config and opens a database connection.

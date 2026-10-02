@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { isAxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import ThemeModeControl from '@/components/ThemeModeControl';
@@ -23,8 +24,12 @@ export default function Login() {
     try {
       await login(username, password);
       navigate('/');
-    } catch {
-      setError('Invalid username or password');
+    } catch (err) {
+      setError(
+        isAxiosError(err) && err.response?.status === 429
+          ? 'Too many failed attempts. Try again in a few minutes.'
+          : 'Invalid username or password',
+      );
     } finally {
       setLoading(false);
     }

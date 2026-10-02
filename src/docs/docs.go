@@ -358,6 +358,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {

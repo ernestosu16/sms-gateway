@@ -201,12 +201,15 @@ Important notes:
 
 ## Default Login
 
-On first start, a default admin account is created:
+On first start, an `admin` account is created with a random password, printed once in the server log:
 
-- **Username:** `admin`
-- **Password:** `admin123`
+```text
+Admin login: username admin, password <random>
+```
 
-You will be required to change the password on first login.
+Read it with `sudo journalctl -u sms-gateway` (systemd) or `docker compose logs sms-gateway` (Docker). You must change it on first login; until then the API only allows changing the password or logging out.
+
+Installs from earlier releases whose admin still has the old default password `admin123` get a new random password the same way on upgrade.
 
 ## Web UI
 

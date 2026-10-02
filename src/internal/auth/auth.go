@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -68,6 +69,15 @@ func ValidateJWT(secret string, tokenStr string) (*JWTClaims, error) {
 	}
 
 	return claims, nil
+}
+
+// GeneratePassword returns a random 24-character password.
+func GeneratePassword() (string, error) {
+	b := make([]byte, 18)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generating password: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // GenerateAPIKey generates a random 32-byte hex-encoded API key.

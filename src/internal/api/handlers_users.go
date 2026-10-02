@@ -78,6 +78,10 @@ func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "username and password are required"})
 		return
 	}
+	if len(req.Password) < minPasswordLength {
+		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: passwordTooShort})
+		return
+	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
