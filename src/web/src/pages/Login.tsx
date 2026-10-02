@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import ThemeModeControl from '@/components/ThemeModeControl';
 
@@ -12,8 +13,7 @@ export default function Login() {
   const navigate = useNavigate();
 
   if (isAuthenticated) {
-    navigate('/', { replace: true });
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -23,8 +23,12 @@ export default function Login() {
     try {
       await login(username, password);
       navigate('/');
-    } catch {
-      setError('Invalid username or password');
+    } catch (err) {
+      setError(
+        isAxiosError(err) && err.response?.status === 429
+          ? 'Too many failed attempts. Try again in a few minutes.'
+          : 'Invalid username or password',
+      );
     } finally {
       setLoading(false);
     }

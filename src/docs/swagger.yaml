@@ -18,6 +18,8 @@ definitions:
       is_active:
         type: boolean
       key:
+        description: Key is the plaintext key, set only in the response that creates
+          it.
         type: string
       label:
         type: string
@@ -41,6 +43,13 @@ definitions:
       current_password:
         type: string
       new_password:
+        type: string
+    type: object
+  models.ChangePasswordResponse:
+    properties:
+      message:
+        type: string
+      token:
         type: string
     type: object
   models.CreateAPIKeyRequest:
@@ -327,7 +336,8 @@ paths:
       - API Keys
   /api/v1/apikeys/{id}:
     delete:
-      description: Deactivates an API key by its unique identifier.
+      description: Deactivates an API key by its unique identifier. Non-admins can
+        only deactivate their own keys.
       parameters:
       - description: API Key ID
         in: path
@@ -347,6 +357,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -358,7 +376,8 @@ paths:
       - API Keys
   /api/v1/apikeys/{id}/delete:
     delete:
-      description: Permanently deletes an API key by its unique identifier.
+      description: Permanently deletes an API key by its unique identifier. Non-admins
+        can only delete their own keys.
       parameters:
       - description: API Key ID
         in: path
@@ -378,8 +397,16 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       security:
@@ -392,7 +419,8 @@ paths:
       consumes:
       - application/json
       description: Allows an authenticated user to change their password by providing
-        the current and new passwords.
+        the current and new passwords. Every existing token is revoked; the response
+        carries a new one for the caller.
       parameters:
       - description: Current and new password
         in: body
@@ -404,11 +432,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: 'message: password updated'
+          description: OK
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/models.ChangePasswordResponse'
         "400":
           description: Bad Request
           schema:
@@ -454,6 +480,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -463,7 +493,8 @@ paths:
       - Auth
   /api/v1/auth/logout:
     post:
-      description: Clears the authentication cookie, logging the user out.
+      description: Revokes every token issued to the authenticated user, logging them
+        out on all devices.
       produces:
       - application/json
       responses:
@@ -473,6 +504,14 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: User logout

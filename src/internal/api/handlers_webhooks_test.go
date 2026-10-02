@@ -208,7 +208,12 @@ func TestWebhookRoutes_RequireAdmin(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, err := auth.GenerateJWT(cfg.JWTSecret, "user-1", tt.isAdmin)
+			// Admin rights come from the stored user, not the token claim.
+			user, err := repo.CreateUser(tt.name, "hash", tt.isAdmin, false)
+			if err != nil {
+				t.Fatalf("CreateUser() error = %v", err)
+			}
+			token, err := auth.GenerateJWT(cfg.JWTSecret, user.ID, tt.isAdmin, user.TokenVersion)
 			if err != nil {
 				t.Fatalf("GenerateJWT() error = %v", err)
 			}

@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import ThemeModeControl from '@/components/ThemeModeControl';
 
 export default function ChangePassword() {
-  const { mustChangePassword, clearMustChangePassword } = useAuth();
+  const { mustChangePassword, completePasswordChange } = useAuth();
   const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -29,11 +29,11 @@ export default function ChangePassword() {
 
     setLoading(true);
     try {
-      await api.post('/auth/change-password', {
+      const res = await api.post('/auth/change-password', {
         current_password: currentPassword,
         new_password: newPassword,
       });
-      clearMustChangePassword();
+      completePasswordChange(res.data.token);
       navigate('/');
     } catch {
       setError('Failed to change password. Check your current password.');

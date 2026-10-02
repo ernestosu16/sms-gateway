@@ -29,14 +29,16 @@ type User struct {
 	PasswordHash       string    `json:"-"`
 	IsAdmin            bool      `json:"is_admin"`
 	MustChangePassword bool      `json:"must_change_password"`
+	TokenVersion       int       `json:"-"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // APIKey represents an API key for authenticating requests.
 type APIKey struct {
-	ID        string    `json:"id"`
-	Key       string    `json:"key"`
+	ID string `json:"id"`
+	// Key is the plaintext key, set only in the response that creates it.
+	Key       string    `json:"key,omitempty"`
 	Label     string    `json:"label"`
 	UserID    string    `json:"user_id"`
 	IsActive  bool      `json:"is_active"`
@@ -192,6 +194,13 @@ type ATCommandResponse struct {
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
+}
+
+// ChangePasswordResponse is the response body after changing a password. Token
+// replaces the caller's token, which the change revoked.
+type ChangePasswordResponse struct {
+	Message string `json:"message"`
+	Token   string `json:"token"`
 }
 
 // ErrorResponse represents an API error.

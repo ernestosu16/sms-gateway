@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 
 interface Message {
@@ -68,7 +69,9 @@ export default function SendSMS() {
     setSending(true);
     setResult(null);
     try {
-      const res = await api.post('/sms/send', { to, body });
+      // The API only accepts digits with an optional leading +, so drop the
+      // separators people paste in formatted numbers.
+      const res = await api.post('/sms/send', { to: to.replace(/[\s().-]/g, ''), body });
       if (res.data.status === 'sent') {
         setResult({ type: 'success', message: 'Message sent successfully.' });
         setTo('');
@@ -77,8 +80,9 @@ export default function SendSMS() {
       } else {
         setResult({ type: 'error', message: res.data.message || 'Failed to send message.' });
       }
-    } catch {
-      setResult({ type: 'error', message: 'Failed to send message.' });
+    } catch (err) {
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
+      setResult({ type: 'error', message: message || 'Failed to send message.' });
     } finally {
       setSending(false);
     }

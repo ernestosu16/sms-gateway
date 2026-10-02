@@ -1,7 +1,9 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -47,13 +49,9 @@ func (h *KeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Non-admins only ever see their own keys, so the same scope must reach the
-	// count. Counting with the wrong scope would leak the global key total to a
-	// non-admin through the X-Total-Count header.
-	scope := ""
-	if !claims.IsAdmin {
-		scope = claims.UserID
-	}
+	// The same scope must reach the count. Counting with the wrong scope would
+	// leak the global key total to a non-admin through the X-Total-Count header.
+	scope := apiKeyScope(claims)
 
 	var keys []models.APIKey
 	if scope == "" {
@@ -120,53 +118,72 @@ func (h *KeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) 
 // HandleDeactivateAPIKey deactivates an API key by ID.
 //
 // @Summary      Deactivate API key
-// @Description  Deactivates an API key by its unique identifier.
+// @Description  Deactivates an API key by its unique identifier. Non-admins can only deactivate their own keys.
 // @Tags         API Keys
 // @Produce      json
 // @Param        id   path      string  true  "API Key ID"
 // @Success      200  {object}  map[string]string  "message: API key deactivated"
 // @Failure      400  {object}  models.ErrorResponse
+// @Failure      401  {object}  models.ErrorResponse
+// @Failure      404  {object}  models.ErrorResponse
 // @Failure      500  {object}  models.ErrorResponse
 // @Security     BearerAuth
 // @Router       /api/v1/apikeys/{id} [delete]
 func (h *KeyHandler) HandleDeactivateAPIKey(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "API key id is required"})
-		return
-	}
-
-	if err := h.repo.DeactivateAPIKey(id); err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to deactivate API key"})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"message": "API key deactivated"})
+	h.changeAPIKey(w, r, h.repo.DeactivateAPIKey, "API key deactivated", "failed to deactivate API key")
 }
 
 // HandleDeleteAPIKey permanently deletes an API key by ID.
 //
 // @Summary      Delete API key
-// @Description  Permanently deletes an API key by its unique identifier.
+// @Description  Permanently deletes an API key by its unique identifier. Non-admins can only delete their own keys.
 // @Tags         API Keys
 // @Produce      json
 // @Param        id   path      string  true  "API Key ID"
 // @Success      200  {object}  map[string]string  "message: API key deleted"
 // @Failure      400  {object}  models.ErrorResponse
+// @Failure      401  {object}  models.ErrorResponse
 // @Failure      404  {object}  models.ErrorResponse
+// @Failure      500  {object}  models.ErrorResponse
 // @Security     BearerAuth
 // @Router       /api/v1/apikeys/{id}/delete [delete]
 func (h *KeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	h.changeAPIKey(w, r, h.repo.DeleteAPIKey, "API key deleted", "failed to delete API key")
+}
+
+// changeAPIKey applies change to the key named in the URL, scoped to the keys
+// the caller may manage. Another user's key answers 404, the same as a key
+// that does not exist, so non-admins cannot probe for key IDs.
+func (h *KeyHandler) changeAPIKey(w http.ResponseWriter, r *http.Request, change func(id, userID string) error, okMsg, failMsg string) {
+	claims := GetUserFromContext(r.Context())
+	if claims == nil {
+		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+		return
+	}
+
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "API key id is required"})
 		return
 	}
 
-	if err := h.repo.DeleteAPIKey(id); err != nil {
-		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+	if err := change(id, apiKeyScope(claims)); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "API key not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: failMsg})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "API key deleted"})
+	writeJSON(w, http.StatusOK, map[string]string{"message": okMsg})
+}
+
+// apiKeyScope returns the user whose keys the caller may list or manage, or ""
+// for an admin, who may manage every key.
+func apiKeyScope(claims *auth.JWTClaims) string {
+	if claims.IsAdmin {
+		return ""
+	}
+	return claims.UserID
 }

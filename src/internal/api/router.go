@@ -28,6 +28,8 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RealIP)
+	r.Use(securityHeaders)
+	r.Use(limitRequestBody)
 
 	// CORS for dev mode.
 	if cfg.DevMode {
@@ -53,7 +55,8 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 	healthHandler := NewHealthHandler(repo, m)
 
 	// Auth middleware shortcuts.
-	jwtAuth := AuthMiddleware(cfg.JWTSecret)
+	jwtAuth := AuthMiddleware(cfg.JWTSecret, repo)
+	passwordChangeAuth := PasswordChangeAuthMiddleware(cfg.JWTSecret, repo)
 	combinedAuth := CombinedAuthMiddleware(cfg.JWTSecret, repo)
 
 	// Public routes.
@@ -77,12 +80,18 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 		r.Get("/api/v1/modem/signal", modemHandler.HandleModemSignal)
 	})
 
+	// Routes a user who must change their password can still reach.
+	r.Group(func(r chi.Router) {
+		r.Use(passwordChangeAuth)
+
+		r.Post("/api/v1/auth/logout", authHandler.HandleLogout)
+		r.Post("/api/v1/auth/change-password", authHandler.HandleChangePassword)
+	})
+
 	// Routes requiring JWT authentication.
 	r.Group(func(r chi.Router) {
 		r.Use(jwtAuth)
 
-		r.Post("/api/v1/auth/logout", authHandler.HandleLogout)
-		r.Post("/api/v1/auth/change-password", authHandler.HandleChangePassword)
 		r.Get("/api/v1/apikeys", apiKeyHandler.HandleListAPIKeys)
 		r.Post("/api/v1/apikeys", apiKeyHandler.HandleCreateAPIKey)
 		r.Delete("/api/v1/apikeys/{id}", apiKeyHandler.HandleDeactivateAPIKey)

@@ -13,7 +13,7 @@ services:
       CONFIG_FILE: ${CONFIG_FILE:-/opt/sms-gateway/sms-gateway.conf}
       DEVICE_PATH: ${DEVICE_PATH:-/dev/ttyUSB0}
       BAUD_RATE: ${BAUD_RATE:-9600}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET to at least 32 random characters, e.g. openssl rand -base64 32}
       DEV_MODE: ${DEV_MODE:-false}
     volumes:
       - sms-gateway-data:/opt/sms-gateway

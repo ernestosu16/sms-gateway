@@ -1,7 +1,9 @@
 package database
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -92,12 +94,23 @@ func (r *Repository) SeedDefaultAdmin(passwordHash string) (bool, error) {
 	return true, nil
 }
 
-// UpdatePassword updates a user's password and clears the must_change_password flag.
+// UpdatePassword updates a user's password, clears the must_change_password
+// flag and revokes the user's existing tokens.
 func (r *Repository) UpdatePassword(userID, passwordHash string) error {
+	return r.setPassword(userID, passwordHash, false)
+}
+
+// ResetPassword replaces a user's password with one they must change on their
+// next login and revokes the user's existing tokens.
+func (r *Repository) ResetPassword(userID, passwordHash string) error {
+	return r.setPassword(userID, passwordHash, true)
+}
+
+func (r *Repository) setPassword(userID, passwordHash string, mustChange bool) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := r.db.Exec(
-		`UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?`,
-		passwordHash, now, userID,
+		`UPDATE users SET password_hash = ?, must_change_password = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?`,
+		passwordHash, boolToInt(mustChange), now, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating password: %w", err)
@@ -105,10 +118,21 @@ func (r *Repository) UpdatePassword(userID, passwordHash string) error {
 	return nil
 }
 
+// RevokeTokens invalidates every token issued to a user so far.
+func (r *Repository) RevokeTokens(userID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := r.db.Exec(
+		`UPDATE users SET token_version = token_version + 1, updated_at = ? WHERE id = ?`, now, userID,
+	); err != nil {
+		return fmt.Errorf("revoking tokens: %w", err)
+	}
+	return nil
+}
+
 // GetUserByID retrieves a user by their ID.
 func (r *Repository) GetUserByID(id string) (*models.User, error) {
 	row := r.db.QueryRow(
-		`SELECT id, username, password_hash, is_admin, must_change_password, created_at, updated_at
+		`SELECT id, username, password_hash, is_admin, must_change_password, token_version, created_at, updated_at
 		 FROM users WHERE id = ?`, id,
 	)
 	return scanUser(row)
@@ -117,7 +141,7 @@ func (r *Repository) GetUserByID(id string) (*models.User, error) {
 // GetUserByUsername retrieves a user by their username.
 func (r *Repository) GetUserByUsername(username string) (*models.User, error) {
 	row := r.db.QueryRow(
-		`SELECT id, username, password_hash, is_admin, must_change_password, created_at, updated_at
+		`SELECT id, username, password_hash, is_admin, must_change_password, token_version, created_at, updated_at
 		 FROM users WHERE username = ?`, username,
 	)
 	return scanUser(row)
@@ -128,7 +152,7 @@ func (r *Repository) ListUsers(opts ListOptions) ([]models.User, error) {
 	// id breaks created_at ties for the same reason it does for messages: the
 	// column has second granularity, so paging needs a stable total order.
 	query, args := applyPagination(
-		`SELECT id, username, password_hash, is_admin, must_change_password, created_at, updated_at
+		`SELECT id, username, password_hash, is_admin, must_change_password, token_version, created_at, updated_at
 		 FROM users ORDER BY created_at DESC, id DESC`,
 		nil, opts,
 	)
@@ -161,7 +185,21 @@ func (r *Repository) CountUsers() (int, error) {
 
 // --- API Keys ---
 
-// CreateAPIKey inserts a new API key and returns it.
+// apiKeyHashPrefix marks a stored API key as a hash. Keys stored before
+// hashing are plain 64-character hex strings, which a bare SHA-256 hex digest
+// could not be told apart from.
+const apiKeyHashPrefix = "sha256:"
+
+// hashAPIKey returns the stored form of an API key. Only the hash is kept, so
+// a leaked database or backup does not hand out working keys. The keys are
+// 256-bit random values, so a fast unsalted hash is enough.
+func hashAPIKey(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return apiKeyHashPrefix + hex.EncodeToString(sum[:])
+}
+
+// CreateAPIKey stores a new API key and returns it. The returned Key holds the
+// plaintext key; it is the only time it is available.
 func (r *Repository) CreateAPIKey(key, label, userID string) (*models.APIKey, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -169,34 +207,66 @@ func (r *Repository) CreateAPIKey(key, label, userID string) (*models.APIKey, er
 	_, err := r.db.Exec(
 		`INSERT INTO api_keys (id, key, label, user_id, is_active, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 1, ?, ?)`,
-		id, key, label, userID, now, now,
+		id, hashAPIKey(key), label, userID, now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating API key: %w", err)
 	}
 
-	return r.getAPIKeyByID(id)
+	created, err := r.getAPIKeyByID(id)
+	if err != nil {
+		return nil, err
+	}
+	created.Key = key
+	return created, nil
 }
 
-// GetAPIKeyByKey retrieves an active API key by its key value.
+// GetAPIKeyByKey retrieves an active API key by its plaintext key value.
 func (r *Repository) GetAPIKeyByKey(key string) (*models.APIKey, error) {
 	row := r.db.QueryRow(
-		`SELECT id, key, label, user_id, is_active, created_at, updated_at
-		 FROM api_keys WHERE key = ? AND is_active = 1`, key,
+		`SELECT `+apiKeyColumns+` FROM api_keys WHERE key = ? AND is_active = 1`, hashAPIKey(key),
 	)
 	return scanAPIKey(row)
+}
+
+// HashLegacyAPIKeys replaces API keys stored in plaintext by earlier releases
+// with their hash and returns how many it converted. It is idempotent and runs
+// at startup, before any key is looked up.
+func (r *Repository) HashLegacyAPIKeys() (int, error) {
+	rows, err := r.db.Query(`SELECT id, key FROM api_keys WHERE key NOT LIKE ?`, apiKeyHashPrefix+"%")
+	if err != nil {
+		return 0, fmt.Errorf("listing plaintext API keys: %w", err)
+	}
+	legacy := map[string]string{}
+	for rows.Next() {
+		var id, key string
+		if err := rows.Scan(&id, &key); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scanning plaintext API key: %w", err)
+		}
+		legacy[id] = key
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("listing plaintext API keys: %w", err)
+	}
+
+	for id, key := range legacy {
+		if _, err := r.db.Exec(`UPDATE api_keys SET key = ? WHERE id = ?`, hashAPIKey(key), id); err != nil {
+			return 0, fmt.Errorf("hashing API key %s: %w", id, err)
+		}
+	}
+	return len(legacy), nil
 }
 
 func (r *Repository) getAPIKeyByID(id string) (*models.APIKey, error) {
-	row := r.db.QueryRow(
-		`SELECT id, key, label, user_id, is_active, created_at, updated_at
-		 FROM api_keys WHERE id = ?`, id,
-	)
+	row := r.db.QueryRow(`SELECT `+apiKeyColumns+` FROM api_keys WHERE id = ?`, id)
 	return scanAPIKey(row)
 }
 
-// apiKeyColumns is the column list shared by every API key SELECT.
-const apiKeyColumns = `id, key, label, user_id, is_active, created_at, updated_at`
+// apiKeyColumns is the column list shared by every API key SELECT. The stored
+// key is a hash, so it is never selected.
+const apiKeyColumns = `id, label, user_id, is_active, created_at, updated_at`
 
 // ListAPIKeys returns API keys newest first, limited according to opts.
 func (r *Repository) ListAPIKeys(opts ListOptions) ([]models.APIKey, error) {
@@ -256,30 +326,50 @@ func (r *Repository) CountAPIKeys(userID string) (int, error) {
 	return total, nil
 }
 
-// DeactivateAPIKey marks an API key as inactive.
-func (r *Repository) DeactivateAPIKey(id string) error {
+// apiKeyByIDFilter builds the WHERE clause that selects one API key for an
+// update or delete. A non-empty userID also requires that user to own the key,
+// so a caller acting for a non-admin cannot touch anyone else's keys; an empty
+// userID matches any owner.
+func apiKeyByIDFilter(id, userID string) (string, []any) {
+	if userID == "" {
+		return ` WHERE id = ?`, []any{id}
+	}
+	return ` WHERE id = ? AND user_id = ?`, []any{id, userID}
+}
+
+// DeactivateAPIKey marks an API key as inactive. userID scopes the change as
+// in apiKeyByIDFilter. The error wraps sql.ErrNoRows when no matching key
+// exists.
+func (r *Repository) DeactivateAPIKey(id, userID string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := r.db.Exec(
-		`UPDATE api_keys SET is_active = 0, updated_at = ? WHERE id = ?`, now, id,
-	)
+	where, args := apiKeyByIDFilter(id, userID)
+	result, err := r.db.Exec(`UPDATE api_keys SET is_active = 0, updated_at = ?`+where, append([]any{now}, args...)...)
 	if err != nil {
 		return fmt.Errorf("deactivating API key: %w", err)
 	}
-	return nil
+	return requireRowAffected(result, "deactivating API key")
 }
 
-// DeleteAPIKey permanently removes an API key by ID.
-func (r *Repository) DeleteAPIKey(id string) error {
-	result, err := r.db.Exec(`DELETE FROM api_keys WHERE id = ?`, id)
+// DeleteAPIKey permanently removes an API key. userID scopes the change as in
+// apiKeyByIDFilter. The error wraps sql.ErrNoRows when no matching key exists.
+func (r *Repository) DeleteAPIKey(id, userID string) error {
+	where, args := apiKeyByIDFilter(id, userID)
+	result, err := r.db.Exec(`DELETE FROM api_keys`+where, args...)
 	if err != nil {
 		return fmt.Errorf("deleting API key: %w", err)
 	}
+	return requireRowAffected(result, "deleting API key")
+}
+
+// requireRowAffected returns an error wrapping sql.ErrNoRows when result
+// changed no rows.
+func requireRowAffected(result sql.Result, action string) error {
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("checking rows affected: %w", err)
+		return fmt.Errorf("%s: checking rows affected: %w", action, err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("API key not found")
+		return fmt.Errorf("%s: %w", action, sql.ErrNoRows)
 	}
 	return nil
 }
@@ -617,7 +707,7 @@ func scanUser(s scannable) (*models.User, error) {
 	var u models.User
 	var isAdmin, mustChangePassword int
 	var createdAt, updatedAt string
-	err := s.Scan(&u.ID, &u.Username, &u.PasswordHash, &isAdmin, &mustChangePassword, &createdAt, &updatedAt)
+	err := s.Scan(&u.ID, &u.Username, &u.PasswordHash, &isAdmin, &mustChangePassword, &u.TokenVersion, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scanning user: %w", err)
 	}
@@ -636,7 +726,7 @@ func scanAPIKey(s scannable) (*models.APIKey, error) {
 	var k models.APIKey
 	var isActive int
 	var createdAt, updatedAt string
-	err := s.Scan(&k.ID, &k.Key, &k.Label, &k.UserID, &isActive, &createdAt, &updatedAt)
+	err := s.Scan(&k.ID, &k.Label, &k.UserID, &isActive, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scanning API key: %w", err)
 	}

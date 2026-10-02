@@ -140,7 +140,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deactivates an API key by its unique identifier.",
+                "description": "Deactivates an API key by its unique identifier. Non-admins can only deactivate their own keys.",
                 "produces": [
                     "application/json"
                 ],
@@ -173,6 +173,18 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -189,7 +201,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Permanently deletes an API key by its unique identifier.",
+                "description": "Permanently deletes an API key by its unique identifier. Non-admins can only delete their own keys.",
                 "produces": [
                     "application/json"
                 ],
@@ -222,8 +234,20 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -238,7 +262,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Allows an authenticated user to change their password by providing the current and new passwords.",
+                "description": "Allows an authenticated user to change their password by providing the current and new passwords. Every existing token is revoked; the response carries a new one for the caller.",
                 "consumes": [
                     "application/json"
                 ],
@@ -262,12 +286,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "message: password updated",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/models.ChangePasswordResponse"
                         }
                     },
                     "400": {
@@ -334,6 +355,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -350,7 +377,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Clears the authentication cookie, logging the user out.",
+                "description": "Revokes every token issued to the authenticated user, logging them out on all devices.",
                 "produces": [
                     "application/json"
                 ],
@@ -366,6 +393,18 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     }
                 }
@@ -1327,6 +1366,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "key": {
+                    "description": "Key is the plaintext key, set only in the response that creates it.",
                     "type": "string"
                 },
                 "label": {
@@ -1363,6 +1403,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "new_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ChangePasswordResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "token": {
                     "type": "string"
                 }
             }

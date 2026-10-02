@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -14,6 +15,9 @@ import (
 type JWTClaims struct {
 	UserID  string `json:"user_id"`
 	IsAdmin bool   `json:"is_admin"`
+	// TokenVersion is the user's token version when the token was issued. A
+	// token is only accepted while it matches the user's current version.
+	TokenVersion int `json:"token_version"`
 	jwt.RegisteredClaims
 }
 
@@ -32,10 +36,11 @@ func CheckPassword(password, hash string) bool {
 }
 
 // GenerateJWT creates a signed JWT token for the given user.
-func GenerateJWT(secret string, userID string, isAdmin bool) (string, error) {
+func GenerateJWT(secret string, userID string, isAdmin bool, tokenVersion int) (string, error) {
 	claims := JWTClaims{
-		UserID:  userID,
-		IsAdmin: isAdmin,
+		UserID:       userID,
+		IsAdmin:      isAdmin,
+		TokenVersion: tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -68,6 +73,15 @@ func ValidateJWT(secret string, tokenStr string) (*JWTClaims, error) {
 	}
 
 	return claims, nil
+}
+
+// GeneratePassword returns a random 24-character password.
+func GeneratePassword() (string, error) {
+	b := make([]byte, 18)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generating password: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // GenerateAPIKey generates a random 32-byte hex-encoded API key.

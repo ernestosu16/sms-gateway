@@ -167,14 +167,68 @@ func TestGetAPIKeyByKey(t *testing.T) {
 	repo := setupTestDB(t)
 
 	user, _ := repo.CreateUser("keyuser2", "hash", false, false)
-	_, _ = repo.CreateAPIKey("findthiskey", "label", user.ID)
+	created, _ := repo.CreateAPIKey("findthiskey", "label", user.ID)
 
 	found, err := repo.GetAPIKeyByKey("findthiskey")
 	if err != nil {
 		t.Fatalf("GetAPIKeyByKey() error = %v", err)
 	}
-	if found.Key != "findthiskey" {
-		t.Errorf("found.Key = %q, want %q", found.Key, "findthiskey")
+	if found.ID != created.ID {
+		t.Errorf("found.ID = %q, want %q", found.ID, created.ID)
+	}
+	if found.Key != "" {
+		t.Errorf("found.Key = %q, want it empty: only creation returns the key", found.Key)
+	}
+}
+
+func TestAPIKeysAreStoredHashed(t *testing.T) {
+	repo := setupTestDB(t)
+	user, _ := repo.CreateUser("hashuser", "hash", false, false)
+	created, _ := repo.CreateAPIKey("plaintext-key", "label", user.ID)
+
+	var stored string
+	if err := repo.db.QueryRow(`SELECT key FROM api_keys WHERE id = ?`, created.ID).Scan(&stored); err != nil {
+		t.Fatalf("reading stored key: %v", err)
+	}
+	if stored != hashAPIKey("plaintext-key") {
+		t.Errorf("stored key = %q, want its hash", stored)
+	}
+
+	keys, _ := repo.ListAPIKeys(ListOptions{})
+	for _, k := range keys {
+		if k.Key != "" {
+			t.Errorf("listed key %s exposes Key %q", k.ID, k.Key)
+		}
+	}
+}
+
+func TestHashLegacyAPIKeys(t *testing.T) {
+	repo := setupTestDB(t)
+	user, _ := repo.CreateUser("legacyuser", "hash", false, false)
+	if _, err := repo.CreateAPIKey("already-hashed", "new", user.ID); err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	// A key as earlier releases stored it: plaintext.
+	if _, err := repo.db.Exec(
+		`INSERT INTO api_keys (id, key, label, user_id, is_active, created_at, updated_at)
+		 VALUES ('legacy-id', 'legacy-plaintext', 'old', ?, 1, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')`,
+		user.ID,
+	); err != nil {
+		t.Fatalf("inserting legacy key: %v", err)
+	}
+
+	n, err := repo.HashLegacyAPIKeys()
+	if err != nil || n != 1 {
+		t.Fatalf("HashLegacyAPIKeys() = %d, %v; want 1, nil", n, err)
+	}
+	if n, err := repo.HashLegacyAPIKeys(); err != nil || n != 0 {
+		t.Errorf("second HashLegacyAPIKeys() = %d, %v; want 0, nil", n, err)
+	}
+
+	for _, key := range []string{"legacy-plaintext", "already-hashed"} {
+		if _, err := repo.GetAPIKeyByKey(key); err != nil {
+			t.Errorf("GetAPIKeyByKey(%q) after conversion error = %v", key, err)
+		}
 	}
 }
 
@@ -184,7 +238,7 @@ func TestDeactivateAPIKey(t *testing.T) {
 	user, _ := repo.CreateUser("keyuser3", "hash", false, false)
 	key, _ := repo.CreateAPIKey("deactivateme", "label", user.ID)
 
-	err := repo.DeactivateAPIKey(key.ID)
+	err := repo.DeactivateAPIKey(key.ID, "")
 	if err != nil {
 		t.Fatalf("DeactivateAPIKey() error = %v", err)
 	}
@@ -193,6 +247,57 @@ func TestDeactivateAPIKey(t *testing.T) {
 	_, err = repo.GetAPIKeyByKey("deactivateme")
 	if err == nil {
 		t.Error("GetAPIKeyByKey() should fail for deactivated key")
+	}
+}
+
+func TestAPIKeyChangesAreScopedToOwner(t *testing.T) {
+	repo := setupTestDB(t)
+
+	owner, _ := repo.CreateUser("keyowner", "hash", false, false)
+	other, _ := repo.CreateUser("keyother", "hash", false, false)
+	key, _ := repo.CreateAPIKey("scopedkey", "label", owner.ID)
+
+	if err := repo.DeactivateAPIKey(key.ID, other.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeactivateAPIKey() by another user error = %v, want sql.ErrNoRows", err)
+	}
+	if err := repo.DeleteAPIKey(key.ID, other.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeleteAPIKey() by another user error = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := repo.GetAPIKeyByKey("scopedkey"); err != nil {
+		t.Fatalf("key should still be active after another user's attempts: %v", err)
+	}
+
+	if err := repo.DeactivateAPIKey(key.ID, owner.ID); err != nil {
+		t.Fatalf("DeactivateAPIKey() by owner error = %v", err)
+	}
+	if err := repo.DeleteAPIKey(key.ID, owner.ID); err != nil {
+		t.Fatalf("DeleteAPIKey() by owner error = %v", err)
+	}
+	if err := repo.DeleteAPIKey(key.ID, ""); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeleteAPIKey() of a deleted key error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestPasswordChangesAndRevokeBumpTokenVersion(t *testing.T) {
+	repo := setupTestDB(t)
+	user, _ := repo.CreateUser("versioned", "hash", false, false)
+	if user.TokenVersion != 0 {
+		t.Fatalf("new user TokenVersion = %d, want 0", user.TokenVersion)
+	}
+
+	steps := []func() error{
+		func() error { return repo.UpdatePassword(user.ID, "hash2") },
+		func() error { return repo.ResetPassword(user.ID, "hash3") },
+		func() error { return repo.RevokeTokens(user.ID) },
+	}
+	for i, step := range steps {
+		if err := step(); err != nil {
+			t.Fatalf("step %d error = %v", i, err)
+		}
+		got, _ := repo.GetUserByID(user.ID)
+		if got.TokenVersion != i+1 {
+			t.Errorf("after step %d TokenVersion = %d, want %d", i, got.TokenVersion, i+1)
+		}
 	}
 }
 

@@ -7,8 +7,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 interface APIKey {
   id: string;
   label: string;
-  key: string;
-  active: boolean;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -35,7 +34,6 @@ export default function APIKeys() {
   const [copied, setCopied] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
 
   const error = actionError || loadError;
 
@@ -46,7 +44,7 @@ export default function APIKeys() {
     setActionError('');
     try {
       const response = await api.post('/apikeys', { label: label.trim() });
-      setNewKey(response.data.key);
+      setNewKey(response.data.api_key.key);
       setLabel('');
       refresh();
     } catch {
@@ -86,23 +84,6 @@ export default function APIKeys() {
     }
   };
 
-  const toggleReveal = (id: string) => {
-    setRevealedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const maskKey = (key: string) => {
-    if (key.length <= 8) return '********';
-    return key.slice(0, 4) + '********' + key.slice(-4);
-  };
-
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -132,8 +113,8 @@ export default function APIKeys() {
           <p className="mb-2 text-sm font-semibold text-amber-800 dark:text-[#b58900]">
             Your new API key has been created. Copy it now -- it will not be shown again.
           </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 rounded border border-amber-200 bg-white px-3 py-2 font-mono text-sm text-gray-900 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <code className="min-w-0 flex-1 break-all rounded border border-amber-200 bg-white px-3 py-2 font-mono text-sm text-gray-900 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5]">
               {newKey}
             </code>
             <button
@@ -196,12 +177,11 @@ export default function APIKeys() {
             No API keys found.
           </div>
         ) : (
-          <div className={refreshing ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+          <div className={`overflow-x-auto transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
             <table className="w-full text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 dark:border-[#586e75] dark:bg-[#002b36]">
                 <tr>
                   <th className="px-6 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">Label</th>
-                  <th className="px-6 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">Key</th>
                   <th className="px-6 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
                     Status
                   </th>
@@ -220,28 +200,7 @@ export default function APIKeys() {
                       {k.label}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <code className="font-mono text-xs text-gray-600 dark:text-[#93a1a1]">
-                          {revealedKeys.has(k.id) ? k.key : maskKey(k.key)}
-                        </code>
-                        <button
-                          onClick={() => toggleReveal(k.id)}
-                          className="text-xs text-blue-600 hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]"
-                          title={revealedKeys.has(k.id) ? 'Hide' : 'Reveal'}
-                        >
-                          {revealedKeys.has(k.id) ? 'Hide' : 'Show'}
-                        </button>
-                        <button
-                          onClick={() => handleCopy(k.key)}
-                          className="text-xs text-blue-600 hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]"
-                          title="Copy to clipboard"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {k.active ? (
+                      {k.is_active ? (
                         <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
                           Active
                         </span>
@@ -256,7 +215,7 @@ export default function APIKeys() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        {k.active && (
+                        {k.is_active && (
                           <>
                             {confirmId === k.id ? (
                               <>
