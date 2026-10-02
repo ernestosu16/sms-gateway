@@ -28,6 +28,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	smsgateway "github.com/mattboston/sms-gateway"
 	"github.com/mattboston/sms-gateway/internal/api"
@@ -200,7 +201,9 @@ func serveCmd() *cobra.Command {
 // the message on the SIM so the next poll retries it.
 func receiveSMS(repo *database.Repository, webhooks *webhook.Dispatcher) func(from, body string) error {
 	return func(from, body string) error {
-		log.Printf("Received SMS from %s: %s", from, body)
+		// The body is not logged: inbound SMS often carry one-time codes, and
+		// logs are kept longer and read more widely than the database.
+		log.Printf("Received SMS from %s (%d characters)", from, utf8.RuneCountInString(body))
 		msg, err := repo.CreateMessage(models.DirectionInbound, from, body, models.StatusReceived, nil)
 		if err != nil {
 			log.Printf("Error saving inbound SMS: %v", err)
