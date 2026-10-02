@@ -171,3 +171,34 @@ func TestContainsCMGS(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSMS(t *testing.T) {
+	tests := []struct {
+		name    string
+		to      string
+		body    string
+		wantErr bool
+	}{
+		{name: "international number", to: "+15551234567", body: "hello"},
+		{name: "short code", to: "7726", body: "STOP"},
+		{name: "multiline unicode body", to: "+15551234567", body: "línea 1\r\nline 2 🙂"},
+		{name: "empty recipient", to: "", body: "hi", wantErr: true},
+		{name: "plus only", to: "+", body: "hi", wantErr: true},
+		{name: "too many digits", to: "+123456789012345678901", body: "hi", wantErr: true},
+		{name: "formatted number", to: "+1 555-123-4567", body: "hi", wantErr: true},
+		{name: "quote breaks out of AT+CMGS", to: `+1555";+CUSD=1,"*100#`, body: "hi", wantErr: true},
+		{name: "CRLF injects a command", to: "+1555\r\nATD+19005550100;", body: "hi", wantErr: true},
+		{name: "Ctrl+Z ends message early", to: "+15551234567", body: "hi\x1aATD+19005550100;\r", wantErr: true},
+		{name: "ESC aborts message", to: "+15551234567", body: "hi\x1b", wantErr: true},
+		{name: "NUL byte", to: "+15551234567", body: "hi\x00", wantErr: true},
+		{name: "DEL", to: "+15551234567", body: "hi\x7f", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateSMS(tt.to, tt.body); (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateSMS(%q, %q) error = %v, wantErr %v", tt.to, tt.body, err, tt.wantErr)
+			}
+		})
+	}
+}

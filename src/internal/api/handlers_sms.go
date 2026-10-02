@@ -102,6 +102,10 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "to and body are required"})
 		return
 	}
+	if err := modem.ValidateSMS(req.To, req.Body); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
 
 	// Determine API key ID if authenticated via API key.
 	var apiKeyID *string

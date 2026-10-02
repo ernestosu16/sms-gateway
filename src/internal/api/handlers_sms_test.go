@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -355,6 +356,43 @@ func TestHandleSendSMS_NotifiesWebhooks(t *testing.T) {
 
 			// Exactly one event per send: a failure must not also report sent.
 			receiver.ExpectNone(t, 200*time.Millisecond)
+		})
+	}
+}
+
+func TestHandleSendSMSRejectsATInjection(t *testing.T) {
+	tests := []struct {
+		name string
+		to   string
+		body string
+	}{
+		{name: "CRLF in recipient", to: "+1555\r\nATD+19005550100;", body: "hi"},
+		{name: "quote in recipient", to: `+1555";+CUSD=1,"*100#`, body: "hi"},
+		{name: "Ctrl+Z in body", to: "+15551234567", body: "hi\x1aATD+19005550100;\r"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, repo := newSMSTestHandler(t)
+			mock := h.modem.(*modem.MockModem)
+
+			payload, err := json.Marshal(models.SendSMSRequest{To: tt.to, Body: tt.body})
+			if err != nil {
+				t.Fatalf("encoding request: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", bytes.NewReader(payload))
+			rec := httptest.NewRecorder()
+			h.HandleSendSMS(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			if sent := mock.SentMessages(); len(sent) != 0 {
+				t.Errorf("modem received %d messages, want none", len(sent))
+			}
+			if total, err := repo.CountMessages(models.DirectionOutbound, nil); err != nil || total != 0 {
+				t.Errorf("stored outbound messages = %d (err %v), want 0", total, err)
+			}
 		})
 	}
 }

@@ -220,6 +220,30 @@ func parseSignalStrength(resp string) (int, error) {
 	return val, nil
 }
 
+// maxRecipientDigits bounds a recipient number. E.164 allows 15 digits; the
+// slack covers national prefixes.
+const maxRecipientDigits = 20
+
+// ValidateSMS rejects input that would escape the AT+CMGS command.
+//
+// The recipient is written inside AT+CMGS="<to>" and, in GSM 7-bit mode, the
+// body is written to the port verbatim. A quote or CR/LF in the recipient, or a
+// Ctrl+Z (ends the message) or ESC (aborts it) in the body, would hand the rest
+// of the input to the modem as AT commands, so every SMS is checked here before
+// it reaches the port.
+func ValidateSMS(to, body string) error {
+	digits := strings.TrimPrefix(to, "+")
+	if digits == "" || len(digits) > maxRecipientDigits || strings.IndexFunc(digits, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		return fmt.Errorf("recipient must be a phone number of up to %d digits with an optional leading +", maxRecipientDigits)
+	}
+	for _, r := range body {
+		if (r < 0x20 && r != '\n' && r != '\r') || r == 0x7F {
+			return fmt.Errorf("body contains control character %U", r)
+		}
+	}
+	return nil
+}
+
 // isGSM7 checks whether all characters in the string are within the GSM 7-bit default alphabet.
 func isGSM7(s string) bool {
 	for _, r := range s {

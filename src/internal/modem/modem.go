@@ -76,6 +76,10 @@ func NewSerialModem(devicePath string, baudRate int) (*SerialModem, error) {
 // If the message contains non-GSM characters (e.g., emoji, unicode),
 // it automatically switches to UCS-2 encoding and switches back after.
 func (m *SerialModem) SendSMS(to, body string) error {
+	if err := ValidateSMS(to, body); err != nil {
+		return err
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
