@@ -1366,6 +1366,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "key": {
+                    "description": "Key is the plaintext key, set only in the response that creates it.",
                     "type": "string"
                 },
                 "label": {

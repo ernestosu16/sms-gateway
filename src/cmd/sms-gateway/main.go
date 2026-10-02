@@ -113,6 +113,14 @@ func serveCmd() *cobra.Command {
 
 			repo := database.NewRepository(db)
 
+			hashed, err := repo.HashLegacyAPIKeys()
+			if err != nil {
+				return fmt.Errorf("hashing stored API keys: %w", err)
+			}
+			if hashed > 0 {
+				log.Printf("Replaced %d plaintext API keys with their hashes", hashed)
+			}
+
 			password, err := prepareAdmin(repo)
 			if err != nil {
 				return fmt.Errorf("preparing admin user: %w", err)

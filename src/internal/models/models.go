@@ -36,8 +36,9 @@ type User struct {
 
 // APIKey represents an API key for authenticating requests.
 type APIKey struct {
-	ID        string    `json:"id"`
-	Key       string    `json:"key"`
+	ID string `json:"id"`
+	// Key is the plaintext key, set only in the response that creates it.
+	Key       string    `json:"key,omitempty"`
 	Label     string    `json:"label"`
 	UserID    string    `json:"user_id"`
 	IsActive  bool      `json:"is_active"`
