@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -487,6 +488,125 @@ func (r *Repository) GetPendingMessages() ([]models.Message, error) {
 	return r.ListMessages(models.DirectionOutbound, &status, ListOptions{})
 }
 
+// --- Webhooks ---
+
+// webhookColumns is the column list shared by every webhook SELECT.
+const webhookColumns = `id, name, url, secret, events, is_active, created_at, updated_at`
+
+// CreateWebhook inserts a new webhook and returns it.
+func (r *Repository) CreateWebhook(name, url, secret string, events []models.WebhookEvent, isActive bool) (*models.Webhook, error) {
+	id := uuid.New().String()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_, err := r.db.Exec(
+		`INSERT INTO webhooks (id, name, url, secret, events, is_active, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, name, url, secret, joinWebhookEvents(events), boolToInt(isActive), now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating webhook: %w", err)
+	}
+
+	return r.GetWebhook(id)
+}
+
+// GetWebhook retrieves a webhook by ID. The error wraps sql.ErrNoRows when no
+// webhook has that ID.
+func (r *Repository) GetWebhook(id string) (*models.Webhook, error) {
+	row := r.db.QueryRow(`SELECT `+webhookColumns+` FROM webhooks WHERE id = ?`, id)
+	return scanWebhook(row)
+}
+
+// ListWebhooks returns webhooks newest first, limited according to opts.
+func (r *Repository) ListWebhooks(opts ListOptions) ([]models.Webhook, error) {
+	query, args := applyPagination(
+		`SELECT `+webhookColumns+` FROM webhooks ORDER BY created_at DESC, id DESC`,
+		nil, opts,
+	)
+	return r.queryWebhooks(query, args...)
+}
+
+// ListActiveWebhooks returns every webhook that should receive deliveries.
+func (r *Repository) ListActiveWebhooks() ([]models.Webhook, error) {
+	return r.queryWebhooks(`SELECT ` + webhookColumns + ` FROM webhooks WHERE is_active = 1`)
+}
+
+func (r *Repository) queryWebhooks(query string, args ...any) ([]models.Webhook, error) {
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing webhooks: %w", err)
+	}
+	defer rows.Close()
+
+	var webhooks []models.Webhook
+	for rows.Next() {
+		w, err := scanWebhook(rows)
+		if err != nil {
+			return nil, err
+		}
+		webhooks = append(webhooks, *w)
+	}
+	return webhooks, rows.Err()
+}
+
+// CountWebhooks returns the total number of webhooks, ignoring any pagination
+// window.
+func (r *Repository) CountWebhooks() (int, error) {
+	var total int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM webhooks`).Scan(&total); err != nil {
+		return 0, fmt.Errorf("counting webhooks: %w", err)
+	}
+	return total, nil
+}
+
+// UpdateWebhook saves every editable field of w and returns the stored webhook.
+// The error wraps sql.ErrNoRows when no webhook has w.ID.
+func (r *Repository) UpdateWebhook(w *models.Webhook) (*models.Webhook, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := r.db.Exec(
+		`UPDATE webhooks SET name = ?, url = ?, secret = ?, events = ?, is_active = ?, updated_at = ? WHERE id = ?`,
+		w.Name, w.URL, w.Secret, joinWebhookEvents(w.Events), boolToInt(w.IsActive), now, w.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("updating webhook: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("checking rows affected: %w", err)
+	}
+	if rows == 0 {
+		return nil, fmt.Errorf("updating webhook: %w", sql.ErrNoRows)
+	}
+	return r.GetWebhook(w.ID)
+}
+
+// DeleteWebhook permanently removes a webhook by ID. The error wraps
+// sql.ErrNoRows when no webhook has that ID.
+func (r *Repository) DeleteWebhook(id string) error {
+	result, err := r.db.Exec(`DELETE FROM webhooks WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting webhook: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deleting webhook: %w", sql.ErrNoRows)
+	}
+	return nil
+}
+
+// joinWebhookEvents encodes events for the comma-separated events column.
+// Event names never contain commas, so no escaping is needed.
+func joinWebhookEvents(events []models.WebhookEvent) string {
+	names := make([]string, len(events))
+	for i, e := range events {
+		names[i] = string(e)
+	}
+	return strings.Join(names, ",")
+}
+
 // --- Scan helpers ---
 
 type scannable interface {
@@ -547,6 +667,27 @@ func scanMessage(s scannable) (*models.Message, error) {
 
 func scanMessageRows(rows *sql.Rows) (*models.Message, error) {
 	return scanMessage(rows)
+}
+
+func scanWebhook(s scannable) (*models.Webhook, error) {
+	var w models.Webhook
+	var events string
+	var isActive int
+	var createdAt, updatedAt string
+	err := s.Scan(&w.ID, &w.Name, &w.URL, &w.Secret, &events, &isActive, &createdAt, &updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("scanning webhook: %w", err)
+	}
+	w.Events = []models.WebhookEvent{}
+	for _, name := range strings.Split(events, ",") {
+		if name != "" {
+			w.Events = append(w.Events, models.WebhookEvent(name))
+		}
+	}
+	w.IsActive = isActive != 0
+	w.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	w.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return &w, nil
 }
 
 func boolToInt(b bool) int {

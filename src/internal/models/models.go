@@ -58,6 +58,56 @@ type Message struct {
 	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
+// WebhookEvent names an event a webhook can subscribe to.
+type WebhookEvent string
+
+const (
+	// EventMessageReceived fires when an inbound SMS is stored.
+	EventMessageReceived WebhookEvent = "message.received"
+	// EventMessageSent fires when the modem accepts an outbound SMS.
+	EventMessageSent WebhookEvent = "message.sent"
+	// EventMessageFailed fires when the modem rejects an outbound SMS.
+	EventMessageFailed WebhookEvent = "message.failed"
+)
+
+// WebhookEvents lists every event a webhook may subscribe to.
+var WebhookEvents = []WebhookEvent{EventMessageReceived, EventMessageSent, EventMessageFailed}
+
+// Webhook is an HTTP endpoint notified when subscribed message events happen.
+type Webhook struct {
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	URL       string         `json:"url"`
+	Secret    string         `json:"secret"`
+	Events    []WebhookEvent `json:"events"`
+	IsActive  bool           `json:"is_active"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// WebhookRequest is the request body for creating or updating a webhook.
+//
+// An empty Secret generates one on create and keeps the current one on update.
+// A nil IsActive means active on create and unchanged on update.
+type WebhookRequest struct {
+	Name     string         `json:"name"`
+	URL      string         `json:"url"`
+	Secret   string         `json:"secret,omitempty"`
+	Events   []WebhookEvent `json:"events"`
+	IsActive *bool          `json:"is_active,omitempty"`
+}
+
+// WebhookPayload is the JSON body POSTed to a webhook URL.
+//
+// ID identifies the event, not the attempt: retries resend the same ID so
+// receivers can discard duplicates.
+type WebhookPayload struct {
+	ID        string       `json:"id"`
+	Event     WebhookEvent `json:"event"`
+	CreatedAt time.Time    `json:"created_at"`
+	Data      *Message     `json:"data"`
+}
+
 // SendSMSRequest is the request body for sending an SMS.
 type SendSMSRequest struct {
 	To   string `json:"to"`

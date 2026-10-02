@@ -1,17 +1,24 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	smsgateway "github.com/mattboston/sms-gateway"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/webhook"
+	"github.com/mattboston/sms-gateway/internal/webhook/webhooktest"
 	_ "modernc.org/sqlite"
 )
 
@@ -31,7 +38,7 @@ func newSMSTestHandler(t *testing.T) (*SMSHandler, *database.Repository) {
 	}
 
 	repo := database.NewRepository(db)
-	return NewSMSHandler(repo, modem.NewMockModem()), repo
+	return NewSMSHandler(repo, modem.NewMockModem(), webhook.NewDispatcher(context.Background(), repo)), repo
 }
 
 func seedMessages(t *testing.T, repo *database.Repository, direction models.Direction, status models.MessageStatus, n int) {
@@ -270,5 +277,84 @@ func TestHandleMessageStats(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("stats.%s = %d, want %d", c.name, c.got, c.want)
 		}
+	}
+}
+
+// failingModem rejects every SMS the way a modem answering +CMS ERROR does.
+type failingModem struct{ *modem.MockModem }
+
+func (failingModem) SendSMS(_, _ string) error {
+	return errors.New("AT command error: +CMS ERROR: 330")
+}
+
+func TestHandleSendSMS_NotifiesWebhooks(t *testing.T) {
+	tests := []struct {
+		name       string
+		modem      modem.Modem
+		wantEvent  models.WebhookEvent
+		wantStatus models.MessageStatus
+		wantError  string
+	}{
+		{"accepted by modem", modem.NewMockModem(), models.EventMessageSent, models.StatusSent, ""},
+		{"rejected by modem", failingModem{modem.NewMockModem()}, models.EventMessageFailed, models.StatusFailed, "+CMS ERROR: 330"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := webhooktest.NewRepository(t)
+			receiver := webhooktest.NewReceiver(t)
+			const secret = "whsec_test_secret_value"
+			events := []models.WebhookEvent{models.EventMessageSent, models.EventMessageFailed}
+			if _, err := repo.CreateWebhook("test", receiver.URL, secret, events, true); err != nil {
+				t.Fatalf("CreateWebhook() error = %v", err)
+			}
+			user, _ := repo.CreateUser("sender", "hash", false, false)
+			key, err := repo.CreateAPIKey("key-value", "script", user.ID)
+			if err != nil {
+				t.Fatalf("CreateAPIKey() error = %v", err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			handler := NewSMSHandler(repo, tt.modem, webhook.NewDispatcher(ctx, repo))
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+15557654321","body":"hello"}`))
+			req = req.WithContext(context.WithValue(req.Context(), contextKeyAPIKey, key))
+			w := httptest.NewRecorder()
+			handler.HandleSendSMS(w, req)
+
+			var resp models.SendSMSResponse
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("decoding response: %v", err)
+			}
+
+			d := receiver.Next(t)
+			if d.Payload.Event != tt.wantEvent || d.Header.Get("X-Webhook-Event") != string(tt.wantEvent) {
+				t.Errorf("event = %q (header %q), want %q", d.Payload.Event, d.Header.Get("X-Webhook-Event"), tt.wantEvent)
+			}
+			timestamp, _ := strconv.ParseInt(d.Header.Get("X-Webhook-Timestamp"), 10, 64)
+			if got, want := d.Header.Get("X-Webhook-Signature"), webhook.Sign(secret, timestamp, d.Body); got != want {
+				t.Errorf("signature = %q, want %q", got, want)
+			}
+
+			msg := d.Payload.Data
+			if msg == nil || msg.ID != resp.ID {
+				t.Fatalf("payload message = %+v, want id %s", msg, resp.ID)
+			}
+			if msg.Direction != models.DirectionOutbound || msg.Status != tt.wantStatus || msg.PhoneNumber != "+15557654321" {
+				t.Errorf("payload message = %+v", msg)
+			}
+			if msg.APIKeyID == nil || *msg.APIKeyID != key.ID {
+				t.Errorf("api_key_id = %v, want %s", msg.APIKeyID, key.ID)
+			}
+			switch {
+			case tt.wantError == "" && msg.ErrorMessage != nil:
+				t.Errorf("error_message = %q, want none", *msg.ErrorMessage)
+			case tt.wantError != "" && (msg.ErrorMessage == nil || !strings.Contains(*msg.ErrorMessage, tt.wantError)):
+				t.Errorf("error_message = %v, want it to contain %q", msg.ErrorMessage, tt.wantError)
+			}
+
+			// Exactly one event per send: a failure must not also report sent.
+			receiver.ExpectNone(t, 200*time.Millisecond)
+		})
 	}
 }

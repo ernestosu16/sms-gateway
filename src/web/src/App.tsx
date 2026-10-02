@@ -9,6 +9,7 @@ import Inbox from '@/pages/Inbox';
 import Outbox from '@/pages/Outbox';
 import MessageDetail from '@/pages/MessageDetail';
 import APIKeys from '@/pages/APIKeys';
+import Webhooks from '@/pages/Webhooks';
 import Users from '@/pages/Users';
 import ModemTest from '@/pages/ModemTest';
 import type { ReactNode } from 'react';
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/outbox" element={<Outbox />} />
         <Route path="/messages/:id" element={<MessageDetail />} />
         <Route path="/apikeys" element={<APIKeys />} />
+        <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/users" element={<Users />} />
         <Route path="/modem" element={<ModemTest />} />
       </Route>

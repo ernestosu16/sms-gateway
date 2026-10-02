@@ -51,6 +51,7 @@ off a runbook.
 - REST API with JWT and API key authentication
 - React web interface with dashboard, inbox, outbox, and message management
 - API key management for programmatic access
+- Signed webhooks for real-time notifications on received, sent and failed messages
 - User management with admin roles
 - Health check endpoint for monitoring
 - SQLite (default) or PostgreSQL database
@@ -322,6 +323,98 @@ Interactive API documentation is available at `/swagger/index.html` when the ser
 | POST | `/api/v1/apikeys` | JWT | Create API key |
 | GET | `/api/v1/users` | JWT + Admin | List users |
 | POST | `/api/v1/users` | JWT + Admin | Create user |
+| GET | `/api/v1/webhooks` | JWT + Admin | List webhooks |
+| POST | `/api/v1/webhooks` | JWT + Admin | Create webhook |
+| PUT | `/api/v1/webhooks/{id}` | JWT + Admin | Update, pause or resume a webhook |
+| DELETE | `/api/v1/webhooks/{id}` | JWT + Admin | Delete webhook |
+
+## Webhooks
+
+Webhooks push message events to your own HTTP endpoint as they happen, so
+integrations no longer need to poll the inbox. Admins manage them on the
+**Webhooks** page of the WebUI or through the `/api/v1/webhooks` endpoints.
+
+Each webhook has:
+
+- **Name**: a label for your own reference.
+- **Delivery URL**: an absolute `http` or `https` URL that receives a `POST` for
+  every subscribed event. LAN addresses are allowed, since self-hosted receivers
+  are a common setup.
+- **Signing Secret**: the HMAC key used to sign deliveries. Leave it blank to
+  have a `whsec_...` secret generated. It must be at least 16 characters.
+- **Events**: one or more of the events below.
+
+| Event | Fires when |
+|-------|------------|
+| `message.received` | An inbound SMS is received and stored |
+| `message.sent` | The modem accepts an outbound SMS |
+| `message.failed` | The modem rejects an outbound SMS |
+
+### Payload
+
+Every delivery is a JSON `POST`. `data` is the message as returned by
+`GET /api/v1/sms/{id}`:
+
+```json
+{
+  "id": "0f9b3c2e-6a51-4d7e-9a43-3c1f0e2b8d11",
+  "event": "message.received",
+  "created_at": "2026-10-02T16:01:23.512Z",
+  "data": {
+    "id": "9918b2a1-59e3-4847-a9a7-e6d02bd32d7b",
+    "direction": "inbound",
+    "phone_number": "+15551234567",
+    "body": "Hello",
+    "status": "received",
+    "created_at": "2026-10-02T16:01:23Z",
+    "updated_at": "2026-10-02T16:01:23Z"
+  }
+}
+```
+
+Request headers:
+
+| Header | Value |
+|--------|-------|
+| `X-Webhook-Id` | The event id, identical to `id` in the body. Retries reuse it, so use it to discard duplicates. |
+| `X-Webhook-Event` | The event name, e.g. `message.received` |
+| `X-Webhook-Timestamp` | Unix time in seconds when this attempt was signed |
+| `X-Webhook-Signature` | `sha256=` followed by the hex HMAC-SHA256 of `<timestamp>.<raw body>` |
+
+### Verifying signatures
+
+Recompute the signature over the raw request body, before any JSON parsing,
+compare it in constant time, and reject timestamps older than a few minutes to
+block replays. Node.js example:
+
+```js
+import crypto from 'node:crypto';
+
+function verifyWebhook(secret, headers, rawBody) {
+  const timestamp = headers['x-webhook-timestamp'];
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+
+  const expected =
+    'sha256=' +
+    crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
+  const received = headers['x-webhook-signature'] ?? '';
+  return (
+    expected.length === received.length &&
+    crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))
+  );
+}
+```
+
+### Delivery and retries
+
+- Any `2xx` response counts as delivered. Anything else, including redirects
+  (which are never followed), timeouts after 10 seconds and connection errors,
+  is retried after 5 seconds, 30 seconds and 2 minutes, for at most 4 attempts.
+- Deliveries run in the background and never delay receiving or sending SMS.
+- Pending deliveries are kept in memory only: deliveries still waiting for a
+  retry when the service stops are dropped. Use `GET /api/v1/sms/inbox` to
+  reconcile if your receiver was down.
+- Paused webhooks receive nothing until resumed.
 
 ## Development
 

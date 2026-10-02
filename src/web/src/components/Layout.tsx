@@ -9,6 +9,7 @@ const navItems = [
   { to: '/inbox', label: 'Inbox' },
   { to: '/outbox', label: 'Outbox' },
   { to: '/apikeys', label: 'API Keys' },
+  { to: '/webhooks', label: 'Webhooks' },
   { to: '/users', label: 'Users' },
   { to: '/modem', label: 'Modem Test' },
 ];
@@ -96,7 +97,9 @@ export default function Layout() {
           <div className="flex-1 lg:ml-0" />
           <div className="flex items-center gap-4">
             <ThemeModeControl />
-            {user && <span className="text-sm text-gray-600 dark:text-[#93a1a1]">{user.username}</span>}
+            {user && (
+              <span className="text-sm text-gray-600 dark:text-[#93a1a1]">{user.username}</span>
+            )}
             <button
               onClick={handleLogout}
               className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-[#073642] dark:text-[#93a1a1] dark:hover:bg-[#0a4452]"

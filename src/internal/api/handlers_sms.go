@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/webhook"
 )
 
 // maxPageSize caps how many messages a single request may return. Values above
@@ -19,8 +21,9 @@ const maxPageSize = 500
 
 // SMSHandler handles SMS-related endpoints.
 type SMSHandler struct {
-	repo  *database.Repository
-	modem modem.Modem
+	repo     *database.Repository
+	modem    modem.Modem
+	webhooks *webhook.Dispatcher
 }
 
 // parseListOptions reads the limit and offset query parameters.
@@ -70,8 +73,8 @@ func writePage[T any](w http.ResponseWriter, items []T, total int) {
 }
 
 // NewSMSHandler creates a new SMSHandler.
-func NewSMSHandler(repo *database.Repository, m modem.Modem) *SMSHandler {
-	return &SMSHandler{repo: repo, modem: m}
+func NewSMSHandler(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispatcher) *SMSHandler {
+	return &SMSHandler{repo: repo, modem: m, webhooks: webhooks}
 }
 
 // HandleSendSMS sends an SMS message.
@@ -117,6 +120,7 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	if err := h.modem.SendSMS(req.To, req.Body); err != nil {
 		errStr := err.Error()
 		_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusFailed, nil, &errStr)
+		h.notify(models.EventMessageFailed, msg.ID)
 		writeJSON(w, http.StatusOK, models.SendSMSResponse{
 			ID:      msg.ID,
 			Status:  models.StatusFailed,
@@ -126,12 +130,24 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusSent, nil, nil)
+	h.notify(models.EventMessageSent, msg.ID)
 
 	writeJSON(w, http.StatusOK, models.SendSMSResponse{
 		ID:      msg.ID,
 		Status:  models.StatusSent,
 		Message: "message sent",
 	})
+}
+
+// notify sends event to webhooks with the message as stored after its final
+// status update, so the payload carries the status and error the event reports.
+func (h *SMSHandler) notify(event models.WebhookEvent, messageID string) {
+	msg, err := h.repo.GetMessage(messageID)
+	if err != nil {
+		log.Printf("webhooks: loading message %s for %s: %v", messageID, event, err)
+		return
+	}
+	h.webhooks.Dispatch(event, msg)
 }
 
 // HandleGetInbox returns inbound messages.

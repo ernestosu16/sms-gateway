@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import api from '@/lib/api';
 import Pagination from '@/components/Pagination';
 import { usePaginatedList } from '@/lib/usePaginatedList';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface APIKey {
   id: string;
@@ -75,21 +76,9 @@ export default function APIKeys() {
     }
   };
 
-  const copyToClipboard = async (text: string) => {
+  const handleCopy = async (text: string) => {
     try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        // Fallback for non-secure contexts (HTTP)
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
+      await copyToClipboard(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -148,7 +137,7 @@ export default function APIKeys() {
               {newKey}
             </code>
             <button
-              onClick={() => copyToClipboard(newKey)}
+              onClick={() => handleCopy(newKey)}
               className="rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
             >
               {copied ? 'Copied!' : 'Copy'}
@@ -243,7 +232,7 @@ export default function APIKeys() {
                           {revealedKeys.has(k.id) ? 'Hide' : 'Show'}
                         </button>
                         <button
-                          onClick={() => copyToClipboard(k.key)}
+                          onClick={() => handleCopy(k.key)}
                           className="text-xs text-blue-600 hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]"
                           title="Copy to clipboard"
                         >

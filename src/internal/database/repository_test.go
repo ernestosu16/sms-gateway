@@ -2,6 +2,8 @@ package database
 
 import (
 	"database/sql"
+	"errors"
+	"slices"
 	"testing"
 
 	smsgateway "github.com/mattboston/sms-gateway"
@@ -564,5 +566,94 @@ func TestPing(t *testing.T) {
 	repo := setupTestDB(t)
 	if err := repo.Ping(); err != nil {
 		t.Fatalf("Ping() error = %v", err)
+	}
+}
+
+func TestWebhookCRUD(t *testing.T) {
+	repo := setupTestDB(t)
+
+	events := []models.WebhookEvent{models.EventMessageReceived, models.EventMessageFailed}
+	hook, err := repo.CreateWebhook("CRM", "https://example.com/hook", "secret-0123456789", events, true)
+	if err != nil {
+		t.Fatalf("CreateWebhook() error = %v", err)
+	}
+	if hook.ID == "" || hook.Name != "CRM" || hook.URL != "https://example.com/hook" || !hook.IsActive {
+		t.Fatalf("CreateWebhook() = %+v", hook)
+	}
+	if !slices.Equal(hook.Events, events) {
+		t.Errorf("events = %v, want %v", hook.Events, events)
+	}
+
+	hook.Name = "CRM v2"
+	hook.Events = []models.WebhookEvent{models.EventMessageSent}
+	hook.IsActive = false
+	updated, err := repo.UpdateWebhook(hook)
+	if err != nil {
+		t.Fatalf("UpdateWebhook() error = %v", err)
+	}
+	if updated.Name != "CRM v2" || updated.IsActive || !slices.Equal(updated.Events, hook.Events) {
+		t.Errorf("UpdateWebhook() = %+v", updated)
+	}
+	if updated.Secret != "secret-0123456789" {
+		t.Errorf("secret = %q, want it unchanged", updated.Secret)
+	}
+
+	if err := repo.DeleteWebhook(hook.ID); err != nil {
+		t.Fatalf("DeleteWebhook() error = %v", err)
+	}
+	if _, err := repo.GetWebhook(hook.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetWebhook() after delete error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestWebhookNotFound(t *testing.T) {
+	repo := setupTestDB(t)
+
+	if _, err := repo.UpdateWebhook(&models.Webhook{ID: "missing", Events: []models.WebhookEvent{models.EventMessageSent}}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("UpdateWebhook() error = %v, want sql.ErrNoRows", err)
+	}
+	if err := repo.DeleteWebhook("missing"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeleteWebhook() error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestListWebhooks(t *testing.T) {
+	repo := setupTestDB(t)
+
+	events := []models.WebhookEvent{models.EventMessageReceived}
+	if _, err := repo.CreateWebhook("active", "https://a.example.com", "secret-0123456789", events, true); err != nil {
+		t.Fatalf("CreateWebhook() error = %v", err)
+	}
+	if _, err := repo.CreateWebhook("paused", "https://b.example.com", "secret-0123456789", events, false); err != nil {
+		t.Fatalf("CreateWebhook() error = %v", err)
+	}
+
+	all, err := repo.ListWebhooks(ListOptions{})
+	if err != nil {
+		t.Fatalf("ListWebhooks() error = %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("ListWebhooks() returned %d, want 2", len(all))
+	}
+
+	page, err := repo.ListWebhooks(ListOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("ListWebhooks(limit 1) error = %v", err)
+	}
+	if len(page) != 1 {
+		t.Errorf("ListWebhooks(limit 1) returned %d, want 1", len(page))
+	}
+
+	total, err := repo.CountWebhooks()
+	if err != nil || total != 2 {
+		t.Errorf("CountWebhooks() = %d, %v; want 2", total, err)
+	}
+
+	active, err := repo.ListActiveWebhooks()
+	if err != nil {
+		t.Fatalf("ListActiveWebhooks() error = %v", err)
+	}
+	if len(active) != 1 || active[0].Name != "active" {
+		t.Errorf("ListActiveWebhooks() = %+v, want only the active webhook", active)
 	}
 }

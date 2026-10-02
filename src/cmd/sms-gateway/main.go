@@ -32,7 +32,9 @@ import (
 	"github.com/mattboston/sms-gateway/internal/auth"
 	"github.com/mattboston/sms-gateway/internal/config"
 	"github.com/mattboston/sms-gateway/internal/database"
+	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/webhook"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -141,18 +143,12 @@ func serveCmd() *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			m.StartReceiver(ctx, func(from, body string) error {
-				log.Printf("Received SMS from %s: %s", from, body)
-				_, err := repo.CreateMessage("inbound", from, body, "received", nil)
-				if err != nil {
-					log.Printf("Error saving inbound SMS: %v", err)
-					return err
-				}
-				return nil
-			})
+			webhooks := webhook.NewDispatcher(ctx, repo)
+
+			m.StartReceiver(ctx, receiveSMS(repo, webhooks))
 
 			// Build router.
-			router := api.NewRouter(repo, m, cfg)
+			router := api.NewRouter(repo, m, webhooks, cfg)
 
 			// Start HTTP server.
 			addr := fmt.Sprintf(":%d", cfg.Port)
@@ -188,6 +184,22 @@ func serveCmd() *cobra.Command {
 			log.Println("Server stopped")
 			return nil
 		},
+	}
+}
+
+// receiveSMS returns the modem receiver callback: it stores each inbound SMS and
+// notifies webhooks subscribed to message.received. Returning an error keeps
+// the message on the SIM so the next poll retries it.
+func receiveSMS(repo *database.Repository, webhooks *webhook.Dispatcher) func(from, body string) error {
+	return func(from, body string) error {
+		log.Printf("Received SMS from %s: %s", from, body)
+		msg, err := repo.CreateMessage(models.DirectionInbound, from, body, models.StatusReceived, nil)
+		if err != nil {
+			log.Printf("Error saving inbound SMS: %v", err)
+			return err
+		}
+		webhooks.Dispatch(models.EventMessageReceived, msg)
+		return nil
 	}
 }
 
