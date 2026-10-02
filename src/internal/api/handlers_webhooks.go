@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
@@ -218,6 +219,13 @@ func normalizeWebhookRequest(req *models.WebhookRequest) error {
 	u, err := url.Parse(req.URL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return errors.New("url must be an absolute http or https URL")
+	}
+	// Hostnames are checked again when each delivery dials, after DNS
+	// resolution; a literal IP can be refused right away.
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil {
+		if err := webhook.CheckDestination(ip); err != nil {
+			return fmt.Errorf("url: %w", err)
+		}
 	}
 
 	if req.Secret != "" && len(req.Secret) < minWebhookSecretLength {

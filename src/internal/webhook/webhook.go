@@ -77,7 +77,8 @@ func NewDispatcher(ctx context.Context, repo *database.Repository) *Dispatcher {
 		ctx:  ctx,
 		repo: repo,
 		client: &http.Client{
-			Timeout: requestTimeout,
+			Timeout:   requestTimeout,
+			Transport: newTransport(),
 			// Following a redirect would send the signed payload to a URL the
 			// admin never configured, so a 3xx counts as a failed delivery.
 			CheckRedirect: func(*http.Request, []*http.Request) error {

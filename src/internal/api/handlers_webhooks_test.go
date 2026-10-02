@@ -58,6 +58,8 @@ func TestHandleCreateWebhook_Validation(t *testing.T) {
 		{"relative url", `{"name":"a","url":"/hook","events":["message.received"]}`},
 		{"unsupported scheme", `{"name":"a","url":"ftp://example.com","events":["message.received"]}`},
 		{"missing host", `{"name":"a","url":"https://","events":["message.received"]}`},
+		{"cloud metadata IP", `{"name":"a","url":"http://169.254.169.254/latest/meta-data/","events":["message.received"]}`},
+		{"IPv6 link-local", `{"name":"a","url":"http://[fe80::1]/hook","events":["message.received"]}`},
 		{"no events", `{"name":"a","url":"https://example.com","events":[]}`},
 		{"unknown event", `{"name":"a","url":"https://example.com","events":["message.deleted"]}`},
 		{"short secret", `{"name":"a","url":"https://example.com","secret":"short","events":["message.sent"]}`},
