@@ -21,6 +21,7 @@ type Config struct {
 	DBDSN      string `mapstructure:"db_dsn"`
 	DevicePath string `mapstructure:"device_path"`
 	BaudRate   int    `mapstructure:"baud_rate"`
+	Host       string `mapstructure:"host"`
 	Port       int    `mapstructure:"port"`
 	DevMode    bool   `mapstructure:"dev_mode"`
 	JWTSecret  string `mapstructure:"jwt_secret"`
@@ -33,6 +34,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("db_dsn", "/opt/sms-gateway/sms-gateway.db")
 	viper.SetDefault("device_path", "")
 	viper.SetDefault("baud_rate", 9600)
+	viper.SetDefault("host", "127.0.0.1")
 	viper.SetDefault("port", 5174)
 	viper.SetDefault("dev_mode", false)
 	viper.SetDefault("jwt_secret", "")

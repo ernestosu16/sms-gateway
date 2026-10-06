@@ -118,7 +118,7 @@ chmod +x install.sh
 sudo ./install.sh
 ```
 
-You will be prompted to choose an install method and provide configuration (device path, port, JWT secret).
+You will be prompted to choose an install method and provide configuration (device path, listen address, port, JWT secret).
 
 ### Manual Install: Systemd
 
@@ -271,6 +271,7 @@ Configuration is done via a config file, CLI flags, or environment variables.
 
 | Flag | Env Var | Default | Description |
 |------|---------|---------|-------------|
+| `--host` | `HOST` | `127.0.0.1` | HTTP server listen address. Use `0.0.0.0` to accept connections from other machines (the Docker image sets `0.0.0.0`) |
 | `--port` | `PORT` | `5174` | HTTP server port |
 | `--db-driver` | `DB_DRIVER` | `sqlite` | Database driver (`sqlite` or `postgres`) |
 | `--db-dsn` | `DB_DSN` | `/opt/sms-gateway/sms-gateway.db` | Database connection string |

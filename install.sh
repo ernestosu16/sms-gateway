@@ -125,9 +125,10 @@ install_systemd() {
   binary_url="https://github.com/${REPO}/releases/download/${version}/sms-gateway-${arch}"
 
   # Configuration values used only when creating a new config file.
-  local device_path="/dev/ttyUSB2" jwt_secret="" port="5174"
+  local device_path="/dev/ttyUSB2" jwt_secret="" host="127.0.0.1" port="5174"
   if [ "$mode" = "install" ]; then
     prompt device_path "Serial device path" "$device_path"
+    prompt host "HTTP listen address (0.0.0.0 to allow other machines)" "$host"
     prompt port "HTTP port" "$port"
     prompt jwt_secret "JWT secret (leave blank to auto-generate)" ""
   else
@@ -192,6 +193,9 @@ install_systemd() {
     if [ "${#existing_secret}" -lt 32 ]; then
       warn "JWT_SECRET in $config_file is shorter than 32 characters; sms-gateway will not start until you replace it (e.g. openssl rand -base64 32)"
     fi
+    if ! grep -q '^HOST=' "$config_file"; then
+      warn "No HOST in $config_file; sms-gateway now listens on 127.0.0.1 only. Add HOST=0.0.0.0 to keep accepting connections from other machines"
+    fi
   else
     if [ "$mode" = "upgrade" ]; then
       warn "Config file missing during upgrade; creating default config: $config_file"
@@ -201,6 +205,7 @@ DB_DRIVER=sqlite
 DB_DSN=${INSTALL_DIR}/sms-gateway.db
 DEVICE_PATH=${device_path}
 BAUD_RATE=9600
+HOST=${host}
 PORT=${port}
 JWT_SECRET=${jwt_secret}
 EOF

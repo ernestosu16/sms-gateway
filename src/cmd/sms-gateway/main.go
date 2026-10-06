@@ -23,9 +23,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -56,6 +58,7 @@ func main() {
 	rootCmd.PersistentFlags().String("db-dsn", "/opt/sms-gateway/sms-gateway.db", "Database connection string")
 	rootCmd.PersistentFlags().String("device-path", "", "Serial device path (e.g., /dev/ttyUSB0)")
 	rootCmd.PersistentFlags().Int("baud-rate", 9600, "Serial baud rate")
+	rootCmd.PersistentFlags().String("host", "127.0.0.1", "HTTP server listen address (0.0.0.0 for all interfaces)")
 	rootCmd.PersistentFlags().Int("port", 5174, "HTTP server port")
 	rootCmd.PersistentFlags().Bool("dev-mode", false, "Enable development mode (mock modem, CORS)")
 	rootCmd.PersistentFlags().String("jwt-secret", "", "JWT signing secret")
@@ -71,6 +74,7 @@ func main() {
 	mustBindPFlag("db_dsn", "db-dsn")
 	mustBindPFlag("device_path", "device-path")
 	mustBindPFlag("baud_rate", "baud-rate")
+	mustBindPFlag("host", "host")
 	mustBindPFlag("port", "port")
 	mustBindPFlag("dev_mode", "dev-mode")
 	mustBindPFlag("jwt_secret", "jwt-secret")
@@ -160,7 +164,7 @@ func serveCmd() *cobra.Command {
 			router := api.NewRouter(repo, m, webhooks, cfg)
 
 			// Start HTTP server.
-			addr := fmt.Sprintf(":%d", cfg.Port)
+			addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 			srv := &http.Server{
 				Addr:         addr,
 				Handler:      router,

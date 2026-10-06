@@ -1,9 +1,37 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestLoadHost(t *testing.T) {
+	t.Setenv("CONFIG_FILE", filepath.Join(t.TempDir(), "missing.conf"))
+
+	tests := []struct {
+		name string
+		env  string
+		want string
+	}{
+		{name: "default is loopback", want: "127.0.0.1"},
+		{name: "HOST env var", env: "0.0.0.0", want: "0.0.0.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Viper treats an empty variable as unset.
+			t.Setenv("HOST", tt.env)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if cfg.Host != tt.want {
+				t.Errorf("Host = %q, want %q", cfg.Host, tt.want)
+			}
+		})
+	}
+}
 
 func TestRequireJWTSecret(t *testing.T) {
 	strong := strings.Repeat("s", minJWTSecretLength)

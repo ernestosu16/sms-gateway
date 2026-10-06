@@ -35,6 +35,9 @@ RUN apt-get update \
 
 COPY --from=go-build /out/sms-gateway /usr/local/bin/sms-gateway
 
+# Listen on every interface inside the container; which host interfaces reach
+# it is decided by the published port (e.g. "127.0.0.1:5174:5174").
+ENV HOST=0.0.0.0
 EXPOSE 5174
 
 ENTRYPOINT ["sms-gateway"]
