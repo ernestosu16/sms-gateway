@@ -4,6 +4,7 @@ import api from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatDayLabel, isSameDay } from '@/lib/format';
 import { isDialable, notifyUnreadChanged } from '@/lib/messages';
+import { describePhone } from '@/lib/phone';
 import { useThread, type ThreadMessage } from '@/lib/useChat';
 import Avatar from '@/components/chat/Avatar';
 import Composer from '@/components/chat/Composer';
@@ -35,6 +36,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
     useThread(phone);
   const { confirm, dialog } = useConfirm();
   const canReply = isDialable(phone);
+  const contact = describePhone(phone);
   const location = useLocation();
   const scrollRef = useRef<ComponentRef<'div'>>(null);
   const atBottomRef = useRef(true);
@@ -130,8 +132,9 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
       title: 'Delete conversation?',
       description: (
         <>
-          Every message sent to or received from <strong className="text-fg">{phone}</strong> is
-          removed. This cannot be undone.
+          Every message sent to or received from{' '}
+          <strong className="text-fg">{contact.formatted}</strong> is removed. This cannot be
+          undone.
         </>
       ),
       confirmLabel: 'Delete conversation',
@@ -166,7 +169,12 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
           <ArrowLeftIcon />
         </Button>
         <Avatar phone={phone} size="sm" />
-        <h2 className="min-w-0 flex-1 truncate font-semibold text-fg">{phone}</h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate leading-tight font-semibold text-fg">{contact.formatted}</h2>
+          {contact.countryName && (
+            <p className="truncate text-xs text-fg-subtle">{contact.countryName}</p>
+          )}
+        </div>
         {notice && (
           <span role="status" className="hidden text-xs text-fg-muted sm:inline">
             {notice}
@@ -205,7 +213,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
           onScroll={handleScroll}
           role="log"
           aria-live="polite"
-          aria-label={`Messages with ${phone}`}
+          aria-label={`Messages with ${contact.formatted}`}
           className="h-full overflow-y-auto overscroll-contain bg-app px-3 pb-4 sm:px-6"
         >
           {hasOlder && (

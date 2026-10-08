@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -9,6 +9,7 @@ import ThemeModeControl from '@/components/ThemeModeControl';
 import {
   DashboardIcon,
   KeyIcon,
+  LoadingState,
   LogoutIcon,
   MenuIcon,
   MessageIcon,
@@ -216,12 +217,16 @@ export default function Layout() {
 
         {fullBleed ? (
           <main className="min-h-0 flex-1 overflow-hidden">
-            <Outlet />
+            <Suspense fallback={<LoadingState label="Loading…" />}>
+              <Outlet />
+            </Suspense>
           </main>
         ) : (
           <main className="flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-              <Outlet />
+              <Suspense fallback={<LoadingState label="Loading…" />}>
+                <Outlet />
+              </Suspense>
             </div>
           </main>
         )}

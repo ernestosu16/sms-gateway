@@ -38,6 +38,8 @@ export default function Composer({
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT_PX)}px`;
+    // A scrollbar only belongs once the text outgrows the cap.
+    el.style.overflowY = el.scrollHeight > MAX_HEIGHT_PX ? 'auto' : 'hidden';
   }, []);
 
   useEffect(fitHeight, [body, fitHeight]);
