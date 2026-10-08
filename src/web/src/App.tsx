@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import Layout from '@/components/Layout';
+import { MessageActivityProvider } from '@/lib/messageActivity';
 import Login from '@/pages/Login';
 import ChangePassword from '@/pages/ChangePassword';
 import MessageRedirect from '@/pages/MessageRedirect';
@@ -34,7 +35,9 @@ export default function App() {
       <Route
         element={
           <ProtectedRoute>
-            <Layout />
+            <MessageActivityProvider>
+              <Layout />
+            </MessageActivityProvider>
           </ProtectedRoute>
         }
       >

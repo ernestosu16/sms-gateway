@@ -1,10 +1,8 @@
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import api from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/cn';
-import { onConversationsChanged } from '@/lib/messages';
-import { usePolling } from '@/lib/usePolling';
+import { useMessageStats } from '@/lib/messageActivity';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import {
   DashboardIcon,
@@ -48,27 +46,8 @@ function sectionTitle(pathname: string): string {
   return 'SMS Gateway';
 }
 
-const UNREAD_POLL_MS = 15000;
-
-/** Total unread inbound messages, for the Messages nav badge. */
-function useUnreadCount(): number {
-  const [unread, setUnread] = useState(0);
-  const fetchUnread = useCallback(() => {
-    api
-      .get<{ unread: number }>('/sms/stats')
-      .then((res) => setUnread(res.data.unread))
-      .catch(() => {
-        // Keep the last known count; the badge is informational.
-      });
-  }, []);
-
-  useEffect(() => {
-    fetchUnread();
-    return onConversationsChanged(fetchUnread);
-  }, [fetchUnread]);
-  usePolling(fetchUnread, UNREAD_POLL_MS);
-
-  return unread;
+function formatUnread(unread: number): string {
+  return unread > 99 ? '99+' : String(unread);
 }
 
 function Brand() {
@@ -89,7 +68,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const unread = useUnreadCount();
+  const unread = useMessageStats()?.unread ?? 0;
   // The chat manages its own scrolling panes, so it fills the main area edge to
   // edge instead of sitting in the padded, scrolling page container.
   const fullBleed = pathname.startsWith('/chats');
@@ -164,7 +143,7 @@ export default function Layout() {
                     <span className="flex-1">{label}</span>
                     {to === '/chats' && unread > 0 && (
                       <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-fg">
-                        {unread > 99 ? '99+' : unread}
+                        {formatUnread(unread)}
                         <span className="sr-only"> unread</span>
                       </span>
                     )}
@@ -206,11 +185,20 @@ export default function Layout() {
         {/* Mobile header */}
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 lg:hidden">
           <button
-            className="-ml-1.5 rounded-md p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg"
+            className="relative -ml-1.5 rounded-md p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg"
             onClick={() => setSidebarOpen(true)}
-            aria-label="Open navigation"
+            aria-label={unread > 0 ? `Open navigation, ${unread} unread` : 'Open navigation'}
           >
             <MenuIcon />
+            {/* The sidebar badge is hidden in the closed drawer, so phones show it here. */}
+            {unread > 0 && (
+              <span
+                className="absolute -top-0.5 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-semibold text-primary-fg"
+                aria-hidden="true"
+              >
+                {formatUnread(unread)}
+              </span>
+            )}
           </button>
           <span className="truncate text-base font-semibold text-fg">{sectionTitle(pathname)}</span>
         </header>

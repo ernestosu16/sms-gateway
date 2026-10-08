@@ -4,7 +4,14 @@ import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
-import { chatPath, type Message } from '@/lib/messages';
+import { useMessageStats } from '@/lib/messageActivity';
+import {
+  chatPath,
+  notifyConversationsChanged,
+  onConversationsChanged,
+  type Message,
+} from '@/lib/messages';
+import { usePolling } from '@/lib/usePolling';
 import PhoneInput from '@/components/PhoneInput';
 import {
   Alert,
@@ -37,20 +44,10 @@ interface ModemSignal {
   quality: string;
 }
 
-// Whole-table counts from /sms/stats. Deriving these from a page of messages
-// would report the page size instead of the real total.
-interface MessageStats {
-  total: number;
-  inbound: number;
-  outbound: number;
-  unread: number;
-  sent: number;
-  pending: number;
-  failed: number;
-}
-
 /** How many recent messages the dashboard shows, and therefore fetches. */
 const RECENT_LIMIT = 10;
+
+const MODEM_POLL_MS = 30000;
 
 function signalBars(quality: string): number {
   switch (quality) {
@@ -74,10 +71,13 @@ export default function Dashboard() {
   const [modemStatus, setModemStatus] = useState<ModemStatus | null>(null);
   const [modemSignal, setModemSignal] = useState<ModemSignal | null>(null);
   const [recentMessages, setRecentMessages] = useState<Message[]>([]);
-  const [totalSent, setTotalSent] = useState(0);
-  const [totalReceived, setTotalReceived] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Counts come from the app-wide activity watcher, which also tells this page
+  // when a message arrives, is sent or changes status.
+  const stats = useMessageStats();
+  const totalSent = stats?.sent ?? 0;
+  const totalReceived = stats?.inbound ?? 0;
+  const pendingCount = stats?.pending ?? 0;
 
   // Quick send form
   const [to, setTo] = useState('');
@@ -88,62 +88,39 @@ export default function Dashboard() {
     message: string;
   } | null>(null);
 
-  const fetchData = useCallback(async () => {
-    try {
-      // The counters come from an aggregate endpoint and the recent list asks
-      // for only the rows it renders. This page previously downloaded both
-      // entire mailboxes to show three numbers and ten rows.
-      const [statusRes, signalRes, statsRes, inboxRes, outboxRes] = await Promise.allSettled([
-        api.get<ModemStatus>('/modem/status'),
-        api.get<ModemSignal>('/modem/signal'),
-        api.get<MessageStats>('/sms/stats'),
-        api.get<Message[]>('/sms/inbox', { params: { all: 'true', limit: RECENT_LIMIT } }),
-        api.get<Message[]>('/sms/outbox', { params: { limit: RECENT_LIMIT } }),
-      ]);
+  const fetchModem = useCallback(async () => {
+    const [statusRes, signalRes] = await Promise.allSettled([
+      api.get<ModemStatus>('/modem/status'),
+      api.get<ModemSignal>('/modem/signal'),
+    ]);
+    if (statusRes.status === 'fulfilled') setModemStatus(statusRes.value.data);
+    else setModemStatus({ status: 'error' });
+    if (signalRes.status === 'fulfilled') setModemSignal(signalRes.value.data);
+  }, []);
 
-      if (statusRes.status === 'fulfilled') setModemStatus(statusRes.value.data);
-      else setModemStatus({ status: 'error' });
+  // The recent list asks for only the rows it renders instead of downloading
+  // both mailboxes.
+  const fetchRecent = useCallback(async () => {
+    const [inboxRes, outboxRes] = await Promise.allSettled([
+      api.get<Message[]>('/sms/inbox', { params: { all: 'true', limit: RECENT_LIMIT } }),
+      api.get<Message[]>('/sms/outbox', { params: { limit: RECENT_LIMIT } }),
+    ]);
+    const inbox = inboxRes.status === 'fulfilled' ? inboxRes.value.data : [];
+    const outbox = outboxRes.status === 'fulfilled' ? outboxRes.value.data : [];
 
-      if (signalRes.status === 'fulfilled') setModemSignal(signalRes.value.data);
-
-      if (statsRes.status === 'fulfilled') {
-        const stats = statsRes.value.data;
-        setTotalReceived(stats.inbound);
-        setTotalSent(stats.sent);
-        setPendingCount(stats.pending);
-      }
-
-      const inbox = inboxRes.status === 'fulfilled' ? inboxRes.value.data : [];
-      const outbox = outboxRes.status === 'fulfilled' ? outboxRes.value.data : [];
-
-      // Both sides arrive newest-first, so merging the two newest-N lists and
-      // taking the newest N yields the same result as sorting everything.
-      const combined = [...inbox, ...outbox]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, RECENT_LIMIT);
-      setRecentMessages(combined);
-    } finally {
-      setLoading(false);
-    }
+    // Both sides arrive newest-first, so merging the two newest-N lists and
+    // taking the newest N yields the same result as sorting everything.
+    const combined = [...inbox, ...outbox]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, RECENT_LIMIT);
+    setRecentMessages(combined);
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(async () => {
-      try {
-        const [statusRes, signalRes] = await Promise.allSettled([
-          api.get<ModemStatus>('/modem/status'),
-          api.get<ModemSignal>('/modem/signal'),
-        ]);
-        if (statusRes.status === 'fulfilled') setModemStatus(statusRes.value.data);
-        else setModemStatus({ status: 'error' });
-        if (signalRes.status === 'fulfilled') setModemSignal(signalRes.value.data);
-      } catch {
-        // ignore
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+    Promise.all([fetchModem(), fetchRecent()]).finally(() => setLoading(false));
+  }, [fetchModem, fetchRecent]);
+  useEffect(() => onConversationsChanged(fetchRecent), [fetchRecent]);
+  usePolling(fetchModem, MODEM_POLL_MS);
 
   const handleQuickSend = async (e: FormEvent) => {
     e.preventDefault();
@@ -155,7 +132,7 @@ export default function Dashboard() {
         setSendResult({ type: 'success', message: 'Message sent successfully.' });
         setTo('');
         setBody('');
-        fetchData();
+        notifyConversationsChanged();
       } else {
         setSendResult({ type: 'error', message: res.data.message || 'Failed to send message.' });
       }
