@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { isAxiosError } from 'axios';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
 import Pagination from '@/components/Pagination';
@@ -20,6 +21,7 @@ import {
   PageHeader,
   PlusIcon,
   UsersIcon,
+  useConfirm,
   type Column,
 } from '@/components/ui';
 
@@ -43,13 +45,15 @@ export default function Users() {
     error: loadError,
     setPage,
     setPageSize,
+    removeItems,
     refresh,
   } = usePaginatedList<UserRecord>('/users');
 
-  const [createError, setCreateError] = useState('');
+  const { confirm, dialog } = useConfirm();
+  const [actionError, setActionError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const error = createError || loadError;
+  const error = actionError || loadError;
 
   // Create form state
   const [username, setUsername] = useState('');
@@ -64,7 +68,7 @@ export default function Users() {
     if (!username.trim() || !password.trim()) return;
 
     setCreating(true);
-    setCreateError('');
+    setActionError('');
     setSuccess('');
 
     try {
@@ -79,7 +83,7 @@ export default function Users() {
       setIsAdmin(false);
       refresh();
     } catch {
-      setCreateError('Failed to create user. Username may already exist.');
+      setActionError('Failed to create user. Username may already exist.');
     } finally {
       setCreating(false);
     }
@@ -93,6 +97,26 @@ export default function Users() {
       </div>
     );
   }
+
+  const handleDelete = async (u: UserRecord) => {
+    const confirmed = await confirm({
+      title: `Delete user "${u.username}"?`,
+      description:
+        'Their account and API keys are removed permanently. Messages they sent are kept.',
+      confirmLabel: 'Delete user',
+    });
+    if (!confirmed) return;
+    setActionError('');
+    setSuccess('');
+    try {
+      await api.delete(`/users/${u.id}`);
+      removeItems(new Set([u.id]));
+      setSuccess(`User "${u.username}" deleted.`);
+    } catch (err) {
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
+      setActionError(typeof message === 'string' ? message : 'Failed to delete user.');
+    }
+  };
 
   const columns: Column<UserRecord>[] = [
     {
@@ -119,6 +143,22 @@ export default function Users() {
       header: 'Created',
       className: 'whitespace-nowrap text-fg-muted',
       cell: (u) => formatDate(u.created_at),
+    },
+    {
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      mobile: 'footer',
+      cell: (u) =>
+        // The server refuses to delete administrators, so they get no button.
+        u.is_admin ? (
+          <span className="text-xs text-fg-subtle md:block md:text-right">Protected</span>
+        ) : (
+          <div className="md:flex md:justify-end">
+            <Button variant="danger-soft" size="sm" onClick={() => handleDelete(u)}>
+              Delete
+            </Button>
+          </div>
+        ),
     },
   ];
 
@@ -205,6 +245,8 @@ export default function Users() {
           </>
         )}
       </Card>
+
+      {dialog}
     </div>
   );
 }
