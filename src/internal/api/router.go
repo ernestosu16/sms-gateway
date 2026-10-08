@@ -104,6 +104,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 		r.Use(AdminMiddleware)
 
 		r.Post("/api/v1/modem/at", modemHandler.HandleSendATCommand)
+		r.Get("/api/v1/modem/at/commands", modemHandler.HandleATCatalog)
 		r.Get("/api/v1/users", userHandler.HandleListUsers)
 		r.Post("/api/v1/users", userHandler.HandleCreateUser)
 		r.Delete("/api/v1/users/{id}", userHandler.HandleDeleteUser)

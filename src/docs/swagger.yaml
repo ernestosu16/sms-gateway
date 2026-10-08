@@ -1,5 +1,19 @@
 basePath: /api/v1
 definitions:
+  api.ATCatalogResponse:
+    properties:
+      commands:
+        items:
+          $ref: '#/definitions/modem.ATCommandInfo'
+        type: array
+      supported:
+        description: |-
+          Supported lists the command names the modem reported through AT+CLAC,
+          or is null when the modem does not support that query.
+        items:
+          type: string
+        type: array
+    type: object
   api.HealthResponse:
     properties:
       database:
@@ -32,10 +46,28 @@ definitions:
     properties:
       command:
         type: string
+      confirm:
+        description: Confirm must be true to run a dangerous or unrecognised command.
+        type: boolean
     type: object
   models.ATCommandResponse:
     properties:
       response:
+        type: string
+    type: object
+  models.ATConfirmationRequired:
+    properties:
+      error:
+        type: string
+      requires_confirmation:
+        type: boolean
+      risk:
+        description: Risk is "dangerous" or "unknown".
+        type: string
+      title:
+        description: Title names the recognised command, when there is one.
+        type: string
+      warning:
         type: string
     type: object
   models.ChangePasswordRequest:
@@ -250,6 +282,103 @@ definitions:
       url:
         type: string
     type: object
+  modem.ATCommandInfo:
+    properties:
+      category:
+        type: string
+      description:
+        type: string
+      example:
+        type: string
+      forms:
+        items:
+          $ref: '#/definitions/modem.ATForm'
+        type: array
+      name:
+        description: |-
+          Name is the command as written after "AT": "+CSQ", "&F", "I", or ""
+          for the bare AT attention command.
+        type: string
+      params:
+        items:
+          $ref: '#/definitions/modem.ATParam'
+        type: array
+      reference:
+        type: string
+      response:
+        type: string
+      risk:
+        allOf:
+        - $ref: '#/definitions/modem.ATRisk'
+        description: |-
+          Risk applies to the execute and set forms. Read and test forms never
+          change anything and are always safe.
+      title:
+        type: string
+      warning:
+        type: string
+    type: object
+  modem.ATForm:
+    properties:
+      description:
+        type: string
+      kind:
+        $ref: '#/definitions/modem.ATFormKind'
+      syntax:
+        type: string
+    type: object
+  modem.ATFormKind:
+    enum:
+    - execute
+    - read
+    - test
+    - set
+    type: string
+    x-enum-comments:
+      FormExecute: AT+CMD
+      FormRead: AT+CMD?
+      FormSet: AT+CMD=<args>, or ATE0 for basic commands
+      FormTest: AT+CMD=?
+    x-enum-descriptions:
+    - AT+CMD
+    - AT+CMD?
+    - AT+CMD=?
+    - AT+CMD=<args>, or ATE0 for basic commands
+    x-enum-varnames:
+    - FormExecute
+    - FormRead
+    - FormTest
+    - FormSet
+  modem.ATParam:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      values:
+        items:
+          $ref: '#/definitions/modem.ATParamValue'
+        type: array
+    type: object
+  modem.ATParamValue:
+    properties:
+      description:
+        type: string
+      value:
+        type: string
+    type: object
+  modem.ATRisk:
+    enum:
+    - safe
+    - config
+    - dangerous
+    - unknown
+    type: string
+    x-enum-varnames:
+    - RiskSafe
+    - RiskConfig
+    - RiskDangerous
+    - RiskUnknown
 host: localhost:5174
 info:
   contact: {}
@@ -559,6 +688,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Dangerous or unrecognised command sent without confirm
+          schema:
+            $ref: '#/definitions/models.ATConfirmationRequired'
         "500":
           description: Internal Server Error
           schema:
@@ -566,6 +699,23 @@ paths:
       security:
       - BearerAuth: []
       summary: Send AT command
+      tags:
+      - Modem
+  /api/v1/modem/at/commands:
+    get:
+      description: Returns documentation for common AT commands, with the risk of
+        running each, and the command names the modem reports through AT+CLAC (null
+        when unsupported). Requires admin privileges.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.ATCatalogResponse'
+      security:
+      - BearerAuth: []
+      summary: AT command reference
       tags:
       - Modem
   /api/v1/modem/signal:

@@ -183,6 +183,19 @@ type ModemSignalResponse struct {
 // ATCommandRequest is the request body for sending a raw AT command.
 type ATCommandRequest struct {
 	Command string `json:"command"`
+	// Confirm must be true to run a dangerous or unrecognised command.
+	Confirm bool `json:"confirm,omitempty"`
+}
+
+// ATConfirmationRequired is returned with 409 when a command needs Confirm.
+type ATConfirmationRequired struct {
+	Error                string `json:"error"`
+	RequiresConfirmation bool   `json:"requires_confirmation"`
+	// Risk is "dangerous" or "unknown".
+	Risk    string `json:"risk"`
+	Warning string `json:"warning,omitempty"`
+	// Title names the recognised command, when there is one.
+	Title string `json:"title,omitempty"`
 }
 
 // ATCommandResponse is the response body for a raw AT command.
