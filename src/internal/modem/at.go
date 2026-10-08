@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 
 	"github.com/warthog618/sms"
 	"github.com/warthog618/sms/encoding/pdumode"
@@ -16,18 +15,14 @@ import (
 
 // AT command constants.
 const (
-	ATCheck          = "AT"
-	ATSetTextMode    = "AT+CMGF=1"
-	ATSignalQuality  = "AT+CSQ"
-	ATSendSMS        = "AT+CMGS="
-	ATSetPDUMode     = "AT+CMGF=0"
-	ATListUnreadPDU  = "AT+CMGL=0" // stat 0 = received unread, PDU mode
-	ATListAllSMS     = "AT+CMGL=\"ALL\""
-	ATDeleteReadSMS  = "AT+CMGD=1,1"
-	ATSetCharsetGSM  = "AT+CSCS=\"GSM\""
-	ATSetCharsetUCS2 = "AT+CSCS=\"UCS2\""
-	ATSetDCSDefault  = "AT+CSMP=17,167,0,0" // GSM 7-bit encoding
-	ATSetDCSUCS2     = "AT+CSMP=17,167,0,8" // UCS-2 encoding
+	ATCheck         = "AT"
+	ATSetTextMode   = "AT+CMGF=1"
+	ATSignalQuality = "AT+CSQ"
+	ATSendSMS       = "AT+CMGS="
+	ATSetPDUMode    = "AT+CMGF=0"
+	ATListUnreadPDU = "AT+CMGL=0" // stat 0 = received unread, PDU mode
+	ATListAllSMS    = "AT+CMGL=\"ALL\""
+	ATDeleteReadSMS = "AT+CMGD=1,1"
 )
 
 // ParsedSMS holds a parsed incoming SMS from an AT+CMGL response.
@@ -225,6 +220,39 @@ func parseSignalStrength(resp string) (int, error) {
 	return val, nil
 }
 
+// maxBodyRunes bounds a body to a handful of concatenated parts (6 in GSM
+// 7-bit, 153 characters each), so a runaway caller cannot tie up the modem.
+const maxBodyRunes = 918
+
+// submitPDU is one part of an outgoing message, ready for AT+CMGS in PDU mode.
+type submitPDU struct {
+	hex    string // SMSC address (empty: the SIM's) followed by the TPDU, hex encoded
+	length int    // TPDU length in octets, the argument of AT+CMGS
+}
+
+// encodeSubmitPDUs encodes a message as SMS-SUBMIT parts. A body that fits in
+// one SMS gives one part; a longer one gives concatenated parts.
+func encodeSubmitPDUs(enc *sms.Encoder, to, body string) ([]submitPDU, error) {
+	tpdus, err := enc.Encode([]byte(body), sms.To(to))
+	if err != nil {
+		return nil, fmt.Errorf("encoding SMS: %w", err)
+	}
+
+	parts := make([]submitPDU, 0, len(tpdus))
+	for _, t := range tpdus {
+		b, err := t.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("encoding SMS part: %w", err)
+		}
+		h, err := (&pdumode.PDU{TPDU: b}).MarshalHexString()
+		if err != nil {
+			return nil, fmt.Errorf("encoding SMS part: %w", err)
+		}
+		parts = append(parts, submitPDU{hex: h, length: len(b)})
+	}
+	return parts, nil
+}
+
 // maxRecipientDigits bounds a recipient number. E.164 allows 15 digits; the
 // slack covers national prefixes.
 const maxRecipientDigits = 20
@@ -241,35 +269,15 @@ func ValidateSMS(to, body string) error {
 	if digits == "" || len(digits) > maxRecipientDigits || strings.IndexFunc(digits, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
 		return fmt.Errorf("recipient must be a phone number of up to %d digits with an optional leading +", maxRecipientDigits)
 	}
+	if n := len([]rune(body)); n > maxBodyRunes {
+		return fmt.Errorf("body is %d characters long; the maximum is %d", n, maxBodyRunes)
+	}
 	for _, r := range body {
 		if (r < 0x20 && r != '\n' && r != '\r') || r == 0x7F {
 			return fmt.Errorf("body contains control character %U", r)
 		}
 	}
 	return nil
-}
-
-// isGSM7 checks whether all characters in the string are within the GSM 7-bit default alphabet.
-func isGSM7(s string) bool {
-	for _, r := range s {
-		if r > 127 {
-			return false
-		}
-		// GSM 7-bit covers basic ASCII printable chars, CR, LF, and a few extras.
-		// Characters outside this set (like emoji) need UCS-2.
-	}
-	return true
-}
-
-// encodeUCS2 encodes a string as a UCS-2 hex string for AT+CMGS in UCS-2 mode.
-func encodeUCS2(s string) string {
-	runes := []rune(s)
-	u16 := utf16.Encode(runes)
-	var b strings.Builder
-	for _, cp := range u16 {
-		fmt.Fprintf(&b, "%04X", cp)
-	}
-	return b.String()
 }
 
 // parsePDUList parses an AT+CMGL response given in PDU mode into messages.

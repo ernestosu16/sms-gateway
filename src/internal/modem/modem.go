@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/warthog618/sms"
 	"go.bug.st/serial"
 )
 
@@ -25,6 +26,10 @@ type Modem interface {
 type SerialModem struct {
 	port serial.Port
 	mu   sync.Mutex
+
+	// encoder keeps its counters between messages so each long message gets its
+	// own concatenation reference and the phone never mixes parts of two.
+	encoder *sms.Encoder
 }
 
 // NewSerialModem opens a serial connection to the modem at the given device path and baud rate.
@@ -46,7 +51,7 @@ func NewSerialModem(devicePath string, baudRate int) (*SerialModem, error) {
 		return nil, fmt.Errorf("setting read timeout: %w", err)
 	}
 
-	m := &SerialModem{port: port}
+	m := &SerialModem{port: port, encoder: sms.NewEncoder(sms.AsSubmit)}
 
 	// Give the modem a moment to stabilize after port open.
 	time.Sleep(500 * time.Millisecond)
@@ -57,7 +62,8 @@ func NewSerialModem(devicePath string, baudRate int) (*SerialModem, error) {
 		return nil, fmt.Errorf("disabling echo: %w", err)
 	}
 
-	// Set text mode for SMS (as opposed to PDU mode).
+	// Text mode is the resting mode for raw AT commands; SendSMS and the
+	// receiver switch to PDU mode and back.
 	if _, err := m.SendAT(ATSetTextMode); err != nil {
 		port.Close()
 		return nil, fmt.Errorf("setting text mode: %w", err)
@@ -73,8 +79,11 @@ func NewSerialModem(devicePath string, baudRate int) (*SerialModem, error) {
 }
 
 // SendSMS sends an SMS message to the given phone number.
-// If the message contains non-GSM characters (e.g., emoji, unicode),
-// it automatically switches to UCS-2 encoding and switches back after.
+//
+// The message goes out in PDU mode: a body longer than one SMS is split into
+// concatenated parts that the phone joins and shows as a single message, and
+// text outside the GSM 7-bit alphabet is encoded as UCS-2. Every part is sent
+// before returning; if one fails the error names it.
 func (m *SerialModem) SendSMS(to, body string) error {
 	if err := ValidateSMS(to, body); err != nil {
 		return err
@@ -83,66 +92,32 @@ func (m *SerialModem) SendSMS(to, body string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	needsUCS2 := !isGSM7(body)
-
-	if needsUCS2 {
-		// Switch to UCS-2 charset and set Data Coding Scheme for unicode/emoji support.
-		if _, err := sendCommand(m.port, ATSetCharsetUCS2, 2*time.Second); err != nil {
-			return fmt.Errorf("switching to UCS-2: %w", err)
-		}
-		if _, err := sendCommand(m.port, ATSetDCSUCS2, 2*time.Second); err != nil {
-			if _, restoreErr := sendCommand(m.port, ATSetCharsetGSM, 2*time.Second); restoreErr != nil {
-				log.Printf("Warning: failed to restore GSM charset after UCS-2 setup error: %v", restoreErr)
-			}
-			return fmt.Errorf("setting UCS-2 DCS: %w", err)
-		}
-	}
-
-	// Build the send command and message body.
-	var cmd string
-	var msgData []byte
-	if needsUCS2 {
-		cmd = fmt.Sprintf("%s\"%s\"", ATSendSMS, encodeUCS2(to))
-		msgData = append([]byte(encodeUCS2(body)), 0x1A)
-	} else {
-		cmd = fmt.Sprintf("%s\"%s\"", ATSendSMS, to)
-		msgData = append([]byte(body), 0x1A)
-	}
-
-	// Step 1: Send AT+CMGS="<number>" and wait for the ">" prompt.
-	if err := sendPromptCommand(m.port, cmd, 5*time.Second); err != nil {
-		if needsUCS2 {
-			// Best-effort restore to GSM charset and DCS.
-			if _, restoreErr := sendCommand(m.port, ATSetDCSDefault, 2*time.Second); restoreErr != nil {
-				log.Printf("Warning: failed to restore default DCS after prompt error: %v", restoreErr)
-			}
-			if _, restoreErr := sendCommand(m.port, ATSetCharsetGSM, 2*time.Second); restoreErr != nil {
-				log.Printf("Warning: failed to restore GSM charset after prompt error: %v", restoreErr)
-			}
-		}
-		return fmt.Errorf("waiting for SMS prompt: %w", err)
-	}
-
-	// Step 2: Send the message body followed by Ctrl+Z (0x1A).
-	resp, err := sendRawData(m.port, msgData, 30*time.Second)
-
-	// Always restore GSM charset and DCS if we switched.
-	if needsUCS2 {
-		if _, restoreErr := sendCommand(m.port, ATSetDCSDefault, 2*time.Second); restoreErr != nil {
-			log.Printf("Warning: failed to restore default DCS after send: %v", restoreErr)
-		}
-		if _, restoreErr := sendCommand(m.port, ATSetCharsetGSM, 2*time.Second); restoreErr != nil {
-			log.Printf("Warning: failed to restore GSM charset after send: %v", restoreErr)
-		}
-	}
-
+	parts, err := encodeSubmitPDUs(m.encoder, to, body)
 	if err != nil {
-		return fmt.Errorf("sending SMS body: %w", err)
+		return err
 	}
 
-	// Verify we got a +CMGS response (message reference number).
-	if !containsCMGS(resp) {
-		return fmt.Errorf("unexpected send response: %s", resp)
+	if _, err := sendCommand(m.port, ATSetPDUMode, 2*time.Second); err != nil {
+		return fmt.Errorf("switching to PDU mode: %w", err)
+	}
+	defer func() {
+		if _, err := sendCommand(m.port, ATSetTextMode, 2*time.Second); err != nil {
+			log.Printf("Warning: failed to restore SMS text mode: %v", err)
+		}
+	}()
+
+	for i, part := range parts {
+		if err := sendPromptCommand(m.port, fmt.Sprintf("%s%d", ATSendSMS, part.length), 5*time.Second); err != nil {
+			return fmt.Errorf("part %d/%d: waiting for SMS prompt: %w", i+1, len(parts), err)
+		}
+
+		resp, err := sendRawData(m.port, append([]byte(part.hex), 0x1A), 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("part %d/%d: sending SMS: %w", i+1, len(parts), err)
+		}
+		if !containsCMGS(resp) {
+			return fmt.Errorf("part %d/%d: unexpected send response: %s", i+1, len(parts), resp)
+		}
 	}
 
 	return nil
