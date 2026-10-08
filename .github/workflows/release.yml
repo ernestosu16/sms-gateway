@@ -25,6 +25,9 @@ jobs:
             goarch: amd64
             suffix: linux-amd64
           - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: linux
             goarch: arm
             goarm: "7"
             suffix: linux-arm7

@@ -1,6 +1,6 @@
 # SMS Gateway — OpenClaw Skill
 
-An [OpenClaw](https://openclaw.ai) skill for sending and receiving SMS through a self-hosted [SMS Gateway](https://github.com/mattboston/sms-gateway) running on a USB GSM modem.
+An [OpenClaw](https://openclaw.ai) skill for sending and receiving SMS through a self-hosted [SMS Gateway](https://github.com/ernestosu16/sms-gateway) running on a USB GSM modem.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ An [OpenClaw](https://openclaw.ai) skill for sending and receiving SMS through a
 The SMS Gateway is a self-hosted Go binary that serves both a REST API and a WebUI. Run the automated install script on your server or Raspberry Pi:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/mattboston/sms-gateway/main/install.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/ernestosu16/sms-gateway/main/install.sh)"
 ```
 
 This form downloads the script first and passes it to bash as an argument, which
@@ -26,7 +26,7 @@ leaves stdin connected to your keyboard so the interactive prompts work.
 Or download and run manually, which also lets you read the script before running it:
 
 ```bash
-curl -fsSL -o install.sh https://raw.githubusercontent.com/mattboston/sms-gateway/main/install.sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/ernestosu16/sms-gateway/main/install.sh
 chmod +x install.sh
 sudo ./install.sh
 ```
@@ -39,10 +39,11 @@ Re-run the install script to upgrade to the latest release — it will update th
 
 ### Default Login
 
-On first start, a default admin account is created:
+On first start, an `admin` account is created with a random password, printed once in the server log (`sudo journalctl -u sms-gateway`):
 
-- **Username:** `admin`
-- **Password:** `admin123`
+```text
+Admin login: username admin, password <random>
+```
 
 You will be required to change the password on first login.
 
@@ -58,7 +59,7 @@ cp -R path/to/openclaw/* ~/.openclaw/workspace/skills/sms-gateway/
 Or clone and symlink from the repo:
 
 ```bash
-git clone https://github.com/mattboston/sms-gateway.git ~/sms-gateway
+git clone https://github.com/ernestosu16/sms-gateway.git ~/sms-gateway
 mkdir -p ~/.openclaw/workspace/skills
 ln -s ~/sms-gateway/openclaw ~/.openclaw/workspace/skills/sms-gateway
 ```

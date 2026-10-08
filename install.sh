@@ -3,7 +3,7 @@ set -euo pipefail
 
 DEBUG="${DEBUG:-0}"
 
-REPO="mattboston/sms-gateway"
+REPO="ernestosu16/sms-gateway"
 INSTALL_DIR="/opt/sms-gateway"
 SERVICE_USER="sms-gateway"
 REGISTRY="ghcr.io"

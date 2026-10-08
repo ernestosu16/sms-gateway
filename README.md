@@ -104,7 +104,7 @@ off a runbook.
 - SQLite (default) or PostgreSQL database
 - Interactive Swagger API documentation at `/swagger/`
 - Single binary deployment (frontend embedded via `go:embed`)
-- Cross-platform: Linux x86_64, macOS ARM64, Raspberry Pi
+- Cross-platform: Linux x86_64, Linux ARM64, macOS ARM64, Raspberry Pi (32 and 64-bit)
 - Docker image published to GHCR
 
 ## Hardware Requirements
@@ -196,14 +196,16 @@ Language (Auto, English, Spanish) and theme (Light, Dark, System).
 - A USB GSM modem (e.g., Huawei E220, SIM800)
 - Go 1.25+ and Node.js 22+ (for building from source)
 
-> **Releases come from the original project.** The install script, the GitHub Releases link and the `ghcr.io/mattboston/sms-gateway` image below download builds published by [mattboston/sms-gateway](https://github.com/mattboston/sms-gateway). They do not include changes from this fork that have not been merged upstream; to run this fork, build it [from source](#from-source) or build the Docker image locally (`docker build -t sms-gateway:local .`).
+> The install script and the GitHub Releases link below use the releases published by this fork, [ernestosu16/sms-gateway](https://github.com/ernestosu16/sms-gateway). Releases of the original project are at [mattboston/sms-gateway](https://github.com/mattboston/sms-gateway/releases).
+>
+> The Docker image is the one published by the original project (`ghcr.io/mattboston/sms-gateway`) and does not include the changes of this fork. To run this fork in Docker, build the image locally (see [Docker Compose](#docker-compose)).
 
 ### Automated Install
 
 The install script will guide you through setting up SMS Gateway as a systemd service. It fetches the latest release automatically.
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/mattboston/sms-gateway/main/install.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/ernestosu16/sms-gateway/main/install.sh)"
 ```
 
 This form downloads the script first and passes it to bash as an argument, which
@@ -212,7 +214,7 @@ leaves stdin connected to your keyboard so the interactive prompts work.
 Or download and run manually, which also lets you read the script before running it:
 
 ```bash
-curl -fsSL -o install.sh https://raw.githubusercontent.com/mattboston/sms-gateway/main/install.sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/ernestosu16/sms-gateway/main/install.sh
 chmod +x install.sh
 sudo ./install.sh
 ```
@@ -221,7 +223,7 @@ You will be prompted to choose an install method and provide configuration (devi
 
 ### Manual Install: Systemd
 
-Download the latest release from [GitHub Releases](https://github.com/mattboston/sms-gateway/releases) and set up the service manually:
+Download the latest release from [GitHub Releases](https://github.com/ernestosu16/sms-gateway/releases) and set up the service manually:
 
 ```bash
 # Create service user
@@ -294,7 +296,8 @@ docker compose up -d
 Important notes:
 
 - `JWT_SECRET` is required: Compose refuses to start without it. Keeping it in `.env` gives every `docker compose` command the same value.
-- Released container images are published to `ghcr.io/mattboston/sms-gateway` and tagged with the same version string as the release binaries.
+- The default image, `ghcr.io/mattboston/sms-gateway`, is published by the original project and tagged with its release versions. It does not include the changes of this fork.
+- To run this fork, build the image locally with `docker build -t sms-gateway:local .` and start it with `IMAGE_REPOSITORY=sms-gateway IMAGE_VERSION=local docker compose up -d --pull never`.
 - Set `IMAGE_VERSION` to a release tag such as `0.0.1`, or leave it at `latest`.
 - `DEVICE_PATH` should point at the modem node on the host, for example `/dev/ttyUSB0`.
 - The `/dev:/dev` bind is intentional so reconnects that change the modem from `/dev/ttyUSB0` to another `/dev/ttyUSB*` path do not require editing the Compose file.
@@ -371,7 +374,7 @@ Use the bundled OpenClaw skill and scripts in [`openclaw/`](openclaw/) to send a
 
    ```bash
    cd ~/.openclaw/workspace/skills/sms-gateway/scripts
-   ./send_sms.sh "+15551234567" "Test message from OpenClaw"
+   ./send_sms.sh -t "+15551234567" -m "Test message from OpenClaw"
    ```
 
 8. Restart OpenClaw so it picks up the new skill and config.

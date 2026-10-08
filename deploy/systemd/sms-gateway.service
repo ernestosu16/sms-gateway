@@ -1,6 +1,6 @@
 [Unit]
 Description=SMS Gateway
-Documentation=https://github.com/mattboston/sms-gateway
+Documentation=https://github.com/ernestosu16/sms-gateway
 After=network.target
 
 [Service]
