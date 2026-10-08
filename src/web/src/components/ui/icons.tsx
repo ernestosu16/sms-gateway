@@ -135,3 +135,9 @@ export const MonitorIcon = icon(
     <path d="M8 21h8M12 17v4" />
   </>,
 );
+export const SidebarIcon = icon(
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M9 3v18" />
+  </>,
+);

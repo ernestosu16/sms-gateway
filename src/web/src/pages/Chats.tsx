@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useMatch, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { useResizablePanel } from '@/lib/useResizablePanel';
 import { normalizePhone } from '@/lib/messages';
 import { useConversations } from '@/lib/useChat';
 import ConversationList from '@/components/chat/ConversationList';
 import NewConversation from '@/components/chat/NewConversation';
 import Thread from '@/components/chat/Thread';
-import { EmptyState, MessageIcon } from '@/components/ui';
+import { EmptyState, MessageIcon, ResizeHandle } from '@/components/ui';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -30,14 +31,24 @@ export default function Chats() {
 
   const conversations = useConversations(search);
   const detailOpen = isNew || phone !== undefined;
+  // From lg up the list and the thread sit side by side, split by a handle.
+  const listPanel = useResizablePanel({
+    storageKey: 'sms-gateway.chat-list',
+    min: 280,
+    max: 560,
+    defaultWidth: 384,
+  });
   const backToList = () => navigate('/chats');
 
   return (
-    <div className="flex h-full min-h-0">
+    <div
+      className={cn('flex h-full min-h-0', listPanel.dragging && 'cursor-col-resize select-none')}
+    >
       <div
+        style={{ '--list-w': `${listPanel.width}px` } as CSSProperties}
         className={cn(
           detailOpen ? 'hidden lg:flex' : 'flex',
-          'w-full min-w-0 flex-col lg:w-96 lg:shrink-0 lg:border-r lg:border-border',
+          'relative w-full min-w-0 flex-col lg:w-[var(--list-w)] lg:shrink-0 lg:border-r lg:border-border',
         )}
       >
         <ConversationList
@@ -51,6 +62,12 @@ export default function Chats() {
           search={searchInput}
           onSearchChange={setSearchInput}
           onLoadMore={conversations.loadMore}
+        />
+        <ResizeHandle
+          label="Resize conversation list"
+          dragging={listPanel.dragging}
+          {...listPanel.handleProps}
+          className="hidden lg:block"
         />
       </div>
 
