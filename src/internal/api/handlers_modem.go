@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+	"sync"
 
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
@@ -11,6 +13,20 @@ import (
 // ModemHandler handles modem-related endpoints.
 type ModemHandler struct {
 	modem modem.Modem
+
+	// supported caches the modem's AT+CLAC list. It is filled on the first
+	// successful query and kept for the life of the process, since the
+	// command set of a modem does not change while it runs.
+	supportedMu sync.Mutex
+	supported   []string
+}
+
+// ATCatalogResponse is the AT command reference used by the console.
+type ATCatalogResponse struct {
+	Commands []modem.ATCommandInfo `json:"commands"`
+	// Supported lists the command names the modem reported through AT+CLAC,
+	// or is null when the modem does not support that query.
+	Supported []string `json:"supported"`
 }
 
 // NewModemHandler creates a new ModemHandler.
@@ -70,6 +86,7 @@ func (h *ModemHandler) HandleModemSignal(w http.ResponseWriter, _ *http.Request)
 // @Param        request  body      models.ATCommandRequest   true  "AT command to send"
 // @Success      200      {object}  models.ATCommandResponse
 // @Failure      400      {object}  models.ErrorResponse
+// @Failure      409      {object}  models.ATConfirmationRequired  "Dangerous or unrecognised command sent without confirm"
 // @Failure      500      {object}  models.ErrorResponse
 // @Security     BearerAuth
 // @Router       /api/v1/modem/at [post]
@@ -80,18 +97,73 @@ func (h *ModemHandler) HandleSendATCommand(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if req.Command == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "command is required"})
+	command := strings.TrimSpace(req.Command)
+	if err := modem.ValidateATCommand(command); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	resp, err := h.modem.SendAT(req.Command)
+	// Commands that can break the gateway, or that the catalog cannot vouch
+	// for, only run once the caller has seen the warning and confirmed.
+	class := modem.ClassifyATCommand(command)
+	if class.Risk.RequiresConfirmation() && !req.Confirm {
+		resp := models.ATConfirmationRequired{
+			Error:                "this command requires confirmation",
+			RequiresConfirmation: true,
+			Risk:                 string(class.Risk),
+			Warning:              class.Warning(),
+		}
+		if class.Info != nil {
+			resp.Title = class.Info.Title
+		}
+		writeJSON(w, http.StatusConflict, resp)
+		return
+	}
+
+	resp, err := h.modem.SendAT(command)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, models.ATCommandResponse{Response: resp})
+}
+
+// HandleATCatalog returns the AT command reference and, when the modem
+// supports AT+CLAC, the commands it reports.
+//
+// @Summary      AT command reference
+// @Description  Returns documentation for common AT commands, with the risk of running each, and the command names the modem reports through AT+CLAC (null when unsupported). Requires admin privileges.
+// @Tags         Modem
+// @Produce      json
+// @Success      200  {object}  ATCatalogResponse
+// @Security     BearerAuth
+// @Router       /api/v1/modem/at/commands [get]
+func (h *ModemHandler) HandleATCatalog(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, ATCatalogResponse{
+		Commands:  modem.ATCatalog,
+		Supported: h.supportedCommands(),
+	})
+}
+
+// supportedCommands returns the cached AT+CLAC list, querying the modem when
+// nothing is cached yet. Failures are not cached, so a modem that was busy or
+// disconnected is asked again next time.
+func (h *ModemHandler) supportedCommands() []string {
+	h.supportedMu.Lock()
+	defer h.supportedMu.Unlock()
+
+	if h.supported != nil {
+		return h.supported
+	}
+	resp, err := h.modem.SendAT("AT+CLAC")
+	if err != nil {
+		return nil
+	}
+	if names := modem.ParseCLAC(resp); len(names) > 0 {
+		h.supported = names
+	}
+	return h.supported
 }
 
 func signalQuality(signal int) string {

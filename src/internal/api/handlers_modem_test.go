@@ -92,6 +92,67 @@ func TestHandleSendATCommand_EmptyCommand(t *testing.T) {
 	}
 }
 
+func TestHandleSendATCommandConfirmation(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+		wantRisk string
+	}{
+		{name: "safe runs directly", body: `{"command":"AT+CSQ"}`, wantCode: http.StatusOK},
+		{name: "reading a dangerous command is safe", body: `{"command":"AT+CFUN?"}`, wantCode: http.StatusOK},
+		{name: "dangerous needs confirm", body: `{"command":"AT+CFUN=0"}`, wantCode: http.StatusConflict, wantRisk: "dangerous"},
+		{name: "dangerous with confirm runs", body: `{"command":"AT+CFUN=0","confirm":true}`, wantCode: http.StatusOK},
+		{name: "unknown needs confirm", body: `{"command":"AT^SYSINFO"}`, wantCode: http.StatusConflict, wantRisk: "unknown"},
+		{name: "chained command needs confirm", body: `{"command":"AT+CSQ;+CFUN=0"}`, wantCode: http.StatusConflict, wantRisk: "unknown"},
+		{name: "unknown with confirm runs", body: `{"command":"AT^SYSINFO","confirm":true}`, wantCode: http.StatusOK},
+		{name: "control characters are rejected", body: `{"command":"AT+CSQ\rAT+CFUN=0","confirm":true}`, wantCode: http.StatusBadRequest},
+		{name: "missing AT prefix is rejected", body: `{"command":"CSQ"}`, wantCode: http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewModemHandler(modem.NewMockModem())
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/modem/at", strings.NewReader(tt.body))
+			w := httptest.NewRecorder()
+			handler.HandleSendATCommand(w, req)
+
+			if w.Code != tt.wantCode {
+				t.Fatalf("status = %d, want %d (body %s)", w.Code, tt.wantCode, w.Body.String())
+			}
+			if tt.wantCode == http.StatusConflict {
+				var resp models.ATConfirmationRequired
+				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+					t.Fatalf("decoding: %v", err)
+				}
+				if !resp.RequiresConfirmation || resp.Risk != tt.wantRisk || resp.Warning == "" {
+					t.Errorf("response = %+v, want requires_confirmation with risk %q and a warning", resp, tt.wantRisk)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleATCatalog(t *testing.T) {
+	handler := NewModemHandler(modem.NewMockModem())
+	w := httptest.NewRecorder()
+	handler.HandleATCatalog(w, httptest.NewRequest(http.MethodGet, "/api/v1/modem/at/commands", nil))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	var resp ATCatalogResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if len(resp.Commands) != len(modem.ATCatalog) {
+		t.Errorf("got %d commands, want %d", len(resp.Commands), len(modem.ATCatalog))
+	}
+	// The mock modem does not answer AT+CLAC with a command list.
+	if resp.Supported != nil {
+		t.Errorf("supported = %v, want null", resp.Supported)
+	}
+}
+
 func TestSignalQuality(t *testing.T) {
 	tests := []struct {
 		signal int

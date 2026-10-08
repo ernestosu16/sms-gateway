@@ -7,8 +7,8 @@ interface ConfirmOptions {
   title: string;
   description?: ReactNode;
   confirmLabel?: string;
-  /** danger for destructive actions, primary for everything else. */
-  tone?: 'danger' | 'primary';
+  /** danger for destructive actions, warning for uncertain ones, primary otherwise. */
+  tone?: 'danger' | 'warning' | 'primary';
 }
 
 interface PendingConfirm extends ConfirmOptions {
@@ -81,9 +81,9 @@ function ConfirmDialog({
         <span
           className={cn(
             'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-            tone === 'danger'
-              ? 'bg-danger-soft text-danger-soft-fg'
-              : 'bg-primary-soft text-primary-soft-fg',
+            tone === 'danger' && 'bg-danger-soft text-danger-soft-fg',
+            tone === 'warning' && 'bg-warning-soft text-warning-soft-fg',
+            tone === 'primary' && 'bg-primary-soft text-primary-soft-fg',
           )}
         >
           <AlertIcon className="h-5 w-5" />

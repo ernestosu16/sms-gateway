@@ -478,10 +478,41 @@ const docTemplate = `{
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Dangerous or unrecognised command sent without confirm",
+                        "schema": {
+                            "$ref": "#/definitions/models.ATConfirmationRequired"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/modem/at/commands": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns documentation for common AT commands, with the risk of running each, and the command names the modem reports through AT+CLAC (null when unsupported). Requires admin privileges.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Modem"
+                ],
+                "summary": "AT command reference",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.ATCatalogResponse"
                         }
                     }
                 }
@@ -1394,6 +1425,24 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "api.ATCatalogResponse": {
+            "type": "object",
+            "properties": {
+                "commands": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modem.ATCommandInfo"
+                    }
+                },
+                "supported": {
+                    "description": "Supported lists the command names the modem reported through AT+CLAC,\nor is null when the modem does not support that query.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "api.HealthResponse": {
             "type": "object",
             "properties": {
@@ -1440,6 +1489,10 @@ const docTemplate = `{
             "properties": {
                 "command": {
                     "type": "string"
+                },
+                "confirm": {
+                    "description": "Confirm must be true to run a dangerous or unrecognised command.",
+                    "type": "boolean"
                 }
             }
         },
@@ -1447,6 +1500,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "response": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ATConfirmationRequired": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "requires_confirmation": {
+                    "type": "boolean"
+                },
+                "risk": {
+                    "description": "Risk is \"dangerous\" or \"unknown\".",
+                    "type": "string"
+                },
+                "title": {
+                    "description": "Title names the recognised command, when there is one.",
+                    "type": "string"
+                },
+                "warning": {
                     "type": "string"
                 }
             }
@@ -1765,6 +1840,140 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "modem.ATCommandInfo": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "example": {
+                    "type": "string"
+                },
+                "forms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modem.ATForm"
+                    }
+                },
+                "name": {
+                    "description": "Name is the command as written after \"AT\": \"+CSQ\", \"\u0026F\", \"I\", or \"\"\nfor the bare AT attention command.",
+                    "type": "string"
+                },
+                "params": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modem.ATParam"
+                    }
+                },
+                "reference": {
+                    "type": "string"
+                },
+                "response": {
+                    "type": "string"
+                },
+                "risk": {
+                    "description": "Risk applies to the execute and set forms. Read and test forms never\nchange anything and are always safe.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/modem.ATRisk"
+                        }
+                    ]
+                },
+                "title": {
+                    "type": "string"
+                },
+                "warning": {
+                    "type": "string"
+                }
+            }
+        },
+        "modem.ATForm": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/modem.ATFormKind"
+                },
+                "syntax": {
+                    "type": "string"
+                }
+            }
+        },
+        "modem.ATFormKind": {
+            "type": "string",
+            "enum": [
+                "execute",
+                "read",
+                "test",
+                "set"
+            ],
+            "x-enum-comments": {
+                "FormExecute": "AT+CMD",
+                "FormRead": "AT+CMD?",
+                "FormSet": "AT+CMD=\u003cargs\u003e, or ATE0 for basic commands",
+                "FormTest": "AT+CMD=?"
+            },
+            "x-enum-descriptions": [
+                "AT+CMD",
+                "AT+CMD?",
+                "AT+CMD=?",
+                "AT+CMD=\u003cargs\u003e, or ATE0 for basic commands"
+            ],
+            "x-enum-varnames": [
+                "FormExecute",
+                "FormRead",
+                "FormTest",
+                "FormSet"
+            ]
+        },
+        "modem.ATParam": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/modem.ATParamValue"
+                    }
+                }
+            }
+        },
+        "modem.ATParamValue": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "modem.ATRisk": {
+            "type": "string",
+            "enum": [
+                "safe",
+                "config",
+                "dangerous",
+                "unknown"
+            ],
+            "x-enum-varnames": [
+                "RiskSafe",
+                "RiskConfig",
+                "RiskDangerous",
+                "RiskUnknown"
+            ]
         }
     },
     "securityDefinitions": {

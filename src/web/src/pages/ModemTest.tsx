@@ -1,20 +1,17 @@
-import { useState, useEffect, useCallback, type FormEvent, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
+import ATConsole from '@/components/at/ATConsole';
 import {
-  Alert,
   Badge,
   Button,
   Card,
   CardBody,
   CardHeader,
-  Field,
-  Input,
   PageHeader,
   RefreshIcon,
   Spinner,
-  TerminalIcon,
   type Tone,
 } from '@/components/ui';
 
@@ -25,12 +22,6 @@ interface ModemStatus {
 interface ModemSignal {
   signal: number;
   quality: string;
-}
-
-interface CommandEntry {
-  command: string;
-  response: string;
-  timestamp: Date;
 }
 
 function SignalBars({ strength }: { strength: number }) {
@@ -90,12 +81,6 @@ export default function ModemTest() {
   const [statusError, setStatusError] = useState('');
   const [signalError, setSignalError] = useState('');
 
-  // AT command state
-  const [command, setCommand] = useState('');
-  const [sending, setSending] = useState(false);
-  const [commandError, setCommandError] = useState('');
-  const [history, setHistory] = useState<CommandEntry[]>([]);
-
   const fetchStatus = useCallback(async () => {
     setStatusLoading(true);
     setStatusError('');
@@ -130,53 +115,6 @@ export default function ModemTest() {
   const handleRefresh = () => {
     fetchStatus();
     fetchSignal();
-  };
-
-  const handleSendCommand = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!command.trim()) return;
-
-    setSending(true);
-    setCommandError('');
-    const cmd = command.trim();
-
-    try {
-      const response = await api.post('/modem/at', { command: cmd });
-      setHistory((prev) => [
-        {
-          command: cmd,
-          response: response.data.response ?? JSON.stringify(response.data),
-          timestamp: new Date(),
-        },
-        ...prev,
-      ]);
-      setCommand('');
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === 'object' && err !== null && 'response' in err
-            ? String(
-                (err as { response?: { data?: { error?: string } } }).response?.data?.error ??
-                  'Command failed.',
-              )
-            : 'Command failed.';
-      setCommandError(message);
-      setHistory((prev) => [
-        { command: cmd, response: `ERROR: ${message}`, timestamp: new Date() },
-        ...prev,
-      ]);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
   };
 
   const refreshing = statusLoading || signalLoading;
@@ -244,69 +182,8 @@ export default function ModemTest() {
         </Card>
       </div>
 
-      {/* AT Command Section - Admin only */}
-      {isAdmin && (
-        <Card>
-          <CardHeader
-            title="AT Command"
-            actions={
-              history.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setHistory([])}>
-                  Clear history
-                </Button>
-              )
-            }
-          />
-          <CardBody className="space-y-4">
-            <form
-              onSubmit={handleSendCommand}
-              className="flex flex-col gap-3 sm:flex-row sm:items-end"
-            >
-              <Field label="Command" htmlFor="atCommand" className="flex-1">
-                <Input
-                  id="atCommand"
-                  type="text"
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  required
-                  autoCapitalize="characters"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  placeholder="e.g. AT+CSQ"
-                  className="font-mono"
-                />
-              </Field>
-              <Button type="submit" loading={sending} icon={<TerminalIcon className="h-4 w-4" />}>
-                {sending ? 'Sending...' : 'Send'}
-              </Button>
-            </form>
-
-            {commandError && <Alert>{commandError}</Alert>}
-
-            {/* Command History */}
-            {history.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-fg">Command History</h3>
-                {history.map((entry, index) => (
-                  <div key={index} className="overflow-hidden rounded-lg border border-border">
-                    <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-muted px-3 py-2">
-                      <code className="truncate font-mono text-sm font-semibold text-primary">
-                        {entry.command}
-                      </code>
-                      <span className="shrink-0 text-xs text-fg-subtle">
-                        {formatTime(entry.timestamp)}
-                      </span>
-                    </div>
-                    <pre className="overflow-x-auto bg-code p-3 font-mono text-xs whitespace-pre-wrap break-words text-code-fg">
-                      {entry.response}
-                    </pre>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      )}
+      {/* Raw AT console - admin only, as is the endpoint behind it */}
+      {isAdmin && <ATConsole />}
     </div>
   );
 }
