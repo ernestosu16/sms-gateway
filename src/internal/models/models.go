@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Direction represents the direction of a message.
 type Direction string
@@ -108,6 +111,40 @@ type WebhookPayload struct {
 	Event     WebhookEvent `json:"event"`
 	CreatedAt time.Time    `json:"created_at"`
 	Data      *Message     `json:"data"`
+}
+
+// phoneFormatting holds the characters people type to make a number readable.
+// They carry no meaning for the modem, so stripping them lets "555-123-4567"
+// and "555 123 4567" land in the same conversation.
+var phoneFormatting = strings.NewReplacer(" ", "", "-", "", "(", "", ")", "", ".", "")
+
+// NormalizePhone strips formatting characters from a phone number so every
+// message to or from the same number groups into one conversation.
+//
+// It deliberately does not infer a country code: "5551234567" and
+// "+15551234567" stay distinct because guessing the country could merge
+// unrelated numbers. Alphanumeric sender IDs (e.g. "BANK") pass through
+// untouched apart from the same stripping.
+//
+// Migration 005 applies the same rule in SQL to rows written before this
+// existed; keep the two in sync.
+func NormalizePhone(s string) string {
+	return phoneFormatting.Replace(strings.TrimSpace(s))
+}
+
+// Conversation summarizes every message exchanged with one phone number.
+type Conversation struct {
+	PhoneNumber  string  `json:"phone_number"`
+	LastMessage  Message `json:"last_message"`
+	MessageCount int     `json:"message_count"`
+	// UnreadCount is the number of inbound messages still in "received" status.
+	UnreadCount int `json:"unread_count"`
+}
+
+// ConversationUpdateResponse reports how many messages a conversation-wide
+// action touched.
+type ConversationUpdateResponse struct {
+	Affected int64 `json:"affected"`
 }
 
 // SendSMSRequest is the request body for sending an SMS.

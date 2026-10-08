@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
-import type { Message } from '@/lib/usePaginatedList';
+import { chatPath, type Message } from '@/lib/messages';
 import {
   Alert,
   AlertIcon,
@@ -295,7 +295,7 @@ export default function Dashboard() {
                   <li key={msg.id}>
                     <button
                       type="button"
-                      onClick={() => navigate(`/messages/${msg.id}`)}
+                      onClick={() => navigate(chatPath(msg.phone_number))}
                       className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none sm:px-6"
                     >
                       <div className="min-w-0 flex-1">

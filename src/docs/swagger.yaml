@@ -84,6 +84,24 @@ definitions:
       token:
         type: string
     type: object
+  models.Conversation:
+    properties:
+      last_message:
+        $ref: '#/definitions/models.Message'
+      message_count:
+        type: integer
+      phone_number:
+        type: string
+      unread_count:
+        description: UnreadCount is the number of inbound messages still in "received"
+          status.
+        type: integer
+    type: object
+  models.ConversationUpdateResponse:
+    properties:
+      affected:
+        type: integer
+    type: object
   models.CreateAPIKeyRequest:
     properties:
       label:
@@ -884,6 +902,150 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Mark message as unread
+      tags:
+      - SMS
+  /api/v1/sms/conversations:
+    delete:
+      description: Deletes every inbound and outbound message for the phone number.
+      parameters:
+      - description: Phone number of the conversation
+        in: query
+        name: phone
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ConversationUpdateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete conversation
+      tags:
+      - SMS
+    get:
+      description: Returns inbound and outbound messages grouped by phone number,
+        most recent activity first. Each entry carries the latest message and message/unread
+        counts.
+      parameters:
+      - description: Only conversations with a message whose number or body contains
+          this text
+        in: query
+        name: q
+        type: string
+      - description: Maximum conversations to return (max 500). Omit to return all.
+        in: query
+        name: limit
+        type: integer
+      - description: Conversations to skip. Only applied together with limit.
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total matching conversations is returned in the X-Total-Count
+            header
+          schema:
+            items:
+              $ref: '#/definitions/models.Conversation'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List conversations
+      tags:
+      - SMS
+  /api/v1/sms/conversations/messages:
+    get:
+      description: Returns inbound and outbound messages for one phone number, newest
+        first. Page backwards by passing the oldest received message's id as before_id.
+      parameters:
+      - description: Phone number of the conversation
+        in: query
+        name: phone
+        required: true
+        type: string
+      - description: Maximum messages to return (max 500). Omit to return all.
+        in: query
+        name: limit
+        type: integer
+      - description: Only return messages older than this message
+        in: query
+        name: before_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total messages in the conversation is returned in the X-Total-Count
+            header
+          schema:
+            items:
+              $ref: '#/definitions/models.Message'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get conversation messages
+      tags:
+      - SMS
+  /api/v1/sms/conversations/read:
+    put:
+      description: Marks every unread inbound message from the phone number as read.
+      parameters:
+      - description: Phone number of the conversation
+        in: query
+        name: phone
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ConversationUpdateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Mark conversation as read
       tags:
       - SMS
   /api/v1/sms/inbox:
