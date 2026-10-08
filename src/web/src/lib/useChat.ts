@@ -9,10 +9,6 @@ import {
   type Message,
   type SendSMSResponse,
 } from '@/lib/messages';
-import { usePolling } from '@/lib/usePolling';
-
-/** How often open views re-check the server. The modem itself polls every 10s. */
-export const CHAT_POLL_MS = 5000;
 
 const CONVERSATION_PAGE = 30;
 // The server clamps limit to 500; asking for more would silently stop growing.
@@ -23,8 +19,8 @@ const THREAD_PAGE = 50;
  * Loads the conversation list and keeps it fresh.
  *
  * Instead of tracking pages, it remembers how many rows the user has scrolled
- * into view and re-fetches that many on every poll. One request then refreshes
- * every visible row, so ordering and unread badges never go stale.
+ * into view and re-fetches that many whenever messages change. One request then
+ * refreshes every visible row, so ordering and unread badges never go stale.
  */
 export function useConversations(search: string) {
   const [items, setItems] = useState<Conversation[]>([]);
@@ -67,11 +63,9 @@ export function useConversations(search: string) {
     setLoading(true);
   }, [search]);
 
-  // Re-fetch when a thread is read or a message is sent, so badges and ordering
-  // update immediately instead of on the next poll.
+  // The background activity watcher and local actions (read, send, delete)
+  // announce every change, so the list re-fetches only when something happened.
   useEffect(() => onConversationsChanged(fetchList), [fetchList]);
-
-  usePolling(fetchList, CHAT_POLL_MS);
 
   const hasMore = items.length < total && count < MAX_CONVERSATIONS;
 
@@ -115,8 +109,8 @@ function mergeMessages(current: ThreadMessage[], incoming: Message[]): ThreadMes
 let tempSeq = 0;
 
 /**
- * Loads one conversation and keeps it live: polls for new messages and status
- * changes, pages backwards for history, sends optimistically, and marks
+ * Loads one conversation and keeps it live: re-fetches on message activity
+ * (new messages, status changes), pages backwards for history, sends optimistically, and marks
  * incoming messages read while the thread is open.
  */
 export function useThread(phone: string) {
@@ -125,10 +119,13 @@ export function useThread(phone: string) {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(false);
   const [error, setError] = useState('');
-  // Polling pauses while sends are in flight: the server stores the message
-  // before the modem finishes, so a poll could otherwise show it next to its
-  // optimistic placeholder.
+  // Refreshing pauses while sends are in flight: the server stores the message
+  // before the modem finishes, so a fetch could otherwise show it next to its
+  // optimistic placeholder. The finished send announces a change, which
+  // catches up on anything skipped meanwhile. The ref mirrors the count
+  // synchronously so that announcement already sees the send as finished.
   const [inFlight, setInFlight] = useState(0);
+  const inFlightRef = useRef(0);
   const phoneRef = useRef(phone);
   phoneRef.current = phone;
 
@@ -136,7 +133,7 @@ export function useThread(phone: string) {
     try {
       await api.put('/sms/conversations/read', null, { params: { phone } });
     } catch {
-      return; // Still unread; the next poll retries.
+      return; // Still unread; the next fetch retries.
     }
     if (phoneRef.current !== phone) return;
     setMessages((prev) =>
@@ -182,7 +179,22 @@ export function useThread(phone: string) {
     });
   }, [phone, fetchLatest]);
 
-  usePolling(fetchLatest, CHAT_POLL_MS, inFlight === 0);
+  useEffect(() => {
+    const refresh = () => {
+      if (inFlightRef.current === 0) fetchLatest();
+    };
+    // Returning to the tab re-fetches too, so a thread opened in the background
+    // gets marked read once it is actually seen.
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const unsubscribe = onConversationsChanged(refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      unsubscribe();
+    };
+  }, [fetchLatest]);
 
   const loadOlder = useCallback(async () => {
     const oldest = messages.find((m) => !m.pending);
@@ -216,6 +228,7 @@ export function useThread(phone: string) {
         pending: true,
       };
       setMessages((prev) => [...prev, temp]);
+      inFlightRef.current++;
       setInFlight((n) => n + 1);
 
       try {
@@ -229,11 +242,10 @@ export function useThread(phone: string) {
         };
         setMessages((prev) => {
           // Swap the placeholder for the real record; keep its position so the
-          // bubble does not jump. A later poll fills in the server timestamps.
+          // bubble does not jump. The re-fetch below fills in the server timestamps.
           const withoutDup = prev.filter((m) => m.id !== confirmed.id);
           return withoutDup.map((m) => (m.id === temp.id ? confirmed : m));
         });
-        notifyConversationsChanged();
         return res.data.status !== 'failed';
       } catch (err) {
         // A 400 (e.g. a body over the modem's length limit) means the message
@@ -248,7 +260,9 @@ export function useThread(phone: string) {
         );
         return false;
       } finally {
+        inFlightRef.current--;
         setInFlight((n) => n - 1);
+        notifyConversationsChanged();
       }
     },
     [phone],
