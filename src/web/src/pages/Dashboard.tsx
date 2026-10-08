@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
 import { chatPath, type Message } from '@/lib/messages';
+import PhoneInput from '@/components/PhoneInput';
 import {
   Alert,
   AlertIcon,
@@ -16,7 +17,6 @@ import {
   DirectionBadge,
   EmptyState,
   Field,
-  Input,
   LoadingState,
   MessageIcon,
   MessageStatusBadge,
@@ -255,20 +255,12 @@ export default function Dashboard() {
                   {sendResult.message}
                 </Alert>
               )}
-              <Field
-                label="Phone Number"
-                htmlFor="quickTo"
-                hint="International format: + and country code"
-              >
-                <Input
-                  id="quickTo"
-                  type="tel"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  required
-                  placeholder="+15551234567"
-                />
-              </Field>
+              <div>
+                <label htmlFor="quickTo" className="mb-1.5 block text-sm font-medium text-fg">
+                  Phone Number
+                </label>
+                <PhoneInput id="quickTo" value={to} onChange={setTo} required />
+              </div>
               <Field label="Message" htmlFor="quickBody">
                 <Textarea
                   id="quickBody"

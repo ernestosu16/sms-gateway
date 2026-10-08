@@ -6,11 +6,13 @@ import {
   chatPath,
   isDialable,
   RECIPIENT_FORMAT_HINT,
-  normalizePhone,
   notifyUnreadChanged,
   type SendSMSResponse,
 } from '@/lib/messages';
+import { describeTyping } from '@/lib/phone';
+import Avatar from '@/components/chat/Avatar';
 import Composer from '@/components/chat/Composer';
+import PhoneInput from '@/components/PhoneInput';
 import { Alert, ArrowLeftIcon, Button } from '@/components/ui';
 
 export default function NewConversation({ onBack }: { onBack: () => void }) {
@@ -20,7 +22,8 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
   const [sending, setSending] = useState(false);
 
   const handleSend = async (body: string): Promise<boolean> => {
-    const phone = normalizePhone(to);
+    // PhoneInput already keeps the value as "+" and digits only.
+    const phone = to;
     if (!isDialable(phone)) {
       setError(RECIPIENT_FORMAT_HINT);
       return false;
@@ -45,6 +48,8 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const details = describeTyping(to);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface px-2 sm:h-16 sm:px-4">
@@ -57,33 +62,45 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
         >
           <ArrowLeftIcon />
         </Button>
-        <label htmlFor="new-to" className="pl-1 text-sm font-medium text-fg-muted">
-          To:
+        <h2 className="pl-1 font-semibold text-fg">New message</h2>
+      </header>
+
+      <div className="shrink-0 border-b border-border bg-surface px-4 py-3">
+        <label htmlFor="new-to" className="mb-1.5 block text-xs font-medium text-fg-muted">
+          To
         </label>
-        <input
+        <PhoneInput
           id="new-to"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          autoFocus
           value={to}
-          onChange={(e) => setTo(e.target.value)}
-          placeholder="+15551234567"
+          onChange={(value) => {
+            setTo(value);
+            setError('');
+          }}
+          autoFocus
           aria-invalid={error !== ''}
           aria-describedby={error ? 'new-to-error' : undefined}
-          className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-fg placeholder:text-fg-subtle focus:outline-none"
         />
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-app px-4 py-6">
-        {error ? (
-          <div id="new-to-error" role="alert" className="mx-auto max-w-md">
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto bg-app px-4 py-8">
+        {error && (
+          <div id="new-to-error" role="alert" className="mb-6 w-full max-w-md">
             <Alert>{error}</Alert>
           </div>
+        )}
+        {isDialable(to) ? (
+          <div className="flex flex-col items-center text-center">
+            <Avatar phone={to} size="lg" />
+            <p className="mt-3 text-lg font-semibold text-fg">{details.formatted}</p>
+            {details.countryName && <p className="text-sm text-fg-muted">{details.countryName}</p>}
+            <p className="mt-4 text-sm text-fg-subtle">Write your first message below.</p>
+          </div>
         ) : (
-          <p className="text-center text-sm text-fg-muted">
-            Enter the number in international format, with + and country code (e.g. +15551234567),
-            and write your first message.
-          </p>
+          !error && (
+            <p className="max-w-sm text-center text-sm text-fg-muted">
+              Type the number starting with the country code. The country is detected automatically.
+            </p>
+          )
         )}
       </div>
       <Composer onSend={handleSend} disabled={sending} />

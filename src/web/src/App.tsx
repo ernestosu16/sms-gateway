@@ -1,16 +1,19 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import Layout from '@/components/Layout';
-import Dashboard from '@/pages/Dashboard';
 import Login from '@/pages/Login';
 import ChangePassword from '@/pages/ChangePassword';
-import Chats from '@/pages/Chats';
 import MessageRedirect from '@/pages/MessageRedirect';
 import APIKeys from '@/pages/APIKeys';
 import Webhooks from '@/pages/Webhooks';
 import Users from '@/pages/Users';
 import ModemTest from '@/pages/ModemTest';
-import type { ReactNode } from 'react';
+import { lazy, type ReactNode } from 'react';
+
+// The phone-number metadata (libphonenumber-js) is only needed by these two
+// pages, so they load on demand and keep it out of the initial bundle.
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Chats = lazy(() => import('@/pages/Chats'));
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, mustChangePassword } = useAuth();

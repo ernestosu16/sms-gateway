@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 import { formatListTime } from '@/lib/format';
 import { chatPath, type Conversation } from '@/lib/messages';
+import { describePhone } from '@/lib/phone';
 import Avatar from '@/components/chat/Avatar';
 import {
   Alert,
@@ -132,7 +133,7 @@ export default function ConversationList({
                             unread ? 'font-semibold' : 'font-medium',
                           )}
                         >
-                          {c.phone_number}
+                          {describePhone(c.phone_number).formatted}
                         </span>
                         <time
                           dateTime={c.last_message.created_at}
