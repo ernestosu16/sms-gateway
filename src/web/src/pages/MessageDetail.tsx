@@ -1,83 +1,76 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
+import { cn } from '@/lib/cn';
+import { formatDateTime, formatRelativeTime } from '@/lib/format';
+import type { Message } from '@/lib/usePaginatedList';
+import {
+  Alert,
+  ArrowLeftIcon,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  ChevronDownIcon,
+  Field,
+  LoadingState,
+  MessageStatusBadge,
+  SendIcon,
+  Textarea,
+  TrashIcon,
+} from '@/components/ui';
 
-interface Message {
-  id: string;
-  direction: 'inbound' | 'outbound';
-  phone_number: string;
-  body: string;
-  status: string;
+interface MessageDetails extends Message {
   api_key_id?: string;
   modem_response?: string;
   error_message?: string;
-  created_at: string;
   updated_at: string;
 }
 
-function formatDateTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+function BackLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-muted transition-colors hover:text-primary"
+    >
+      <ArrowLeftIcon className="h-4 w-4" />
+      {children}
+    </button>
+  );
 }
 
-function formatRelativeTime(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return 'just now';
-  if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
-  if (diffHour < 24) return `${diffHour} hour${diffHour !== 1 ? 's' : ''} ago`;
-  if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
-  return date.toLocaleDateString();
-}
-
-function statusBadge(status: string) {
-  const styles: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-800 dark:bg-[#3b3200] dark:text-[#b58900]',
-    sending: 'bg-blue-100 text-blue-800 dark:bg-[#1f3e52] dark:text-[#268bd2]',
-    sent: 'bg-green-100 text-green-800 dark:bg-[#213a25] dark:text-[#859900]',
-    failed: 'bg-red-100 text-red-800 dark:bg-[#3b1f23] dark:text-[#dc322f]',
-    received: 'bg-blue-100 text-blue-800 dark:bg-[#1f3e52] dark:text-[#268bd2]',
-    read: 'bg-gray-100 text-gray-600 dark:bg-[#586e75] dark:text-[#93a1a1]',
-  };
-  return styles[status] ?? 'bg-gray-100 text-gray-800 dark:bg-[#586e75] dark:text-[#eee8d5]';
-}
-
-function statusLabel(status: string) {
-  if (status === 'received') return 'Unread';
-  if (status === 'read') return 'Read';
-  return status;
+/** Label/value row: stacked on phones, side by side from sm up. */
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-1 py-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-4">
+      <dt className="text-sm font-medium text-fg-subtle">{label}</dt>
+      <dd className="min-w-0 text-sm text-fg">{children}</dd>
+    </div>
+  );
 }
 
 export default function MessageDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [message, setMessage] = useState<Message | null>(null);
+  const [message, setMessage] = useState<MessageDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [debugOpen, setDebugOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [replySending, setReplySending] = useState(false);
-  const [replyResult, setReplyResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [replyResult, setReplyResult] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [togglingRead, setTogglingRead] = useState(false);
 
   useEffect(() => {
     const fetchMessage = async () => {
       try {
-        const res = await api.get<Message>(`/sms/${id}`);
+        const res = await api.get<MessageDetails>(`/sms/${id}`);
         setMessage(res.data);
       } catch {
         setError('Message not found.');
@@ -89,25 +82,14 @@ export default function MessageDetail() {
   }, [id]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-gray-500 dark:text-[#93a1a1]">Loading message...</p>
-      </div>
-    );
+    return <LoadingState label="Loading message..." />;
   }
 
   if (error || !message) {
     return (
       <div className="space-y-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-sm text-blue-600 transition-colors hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]"
-        >
-          &larr; Back
-        </button>
-        <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]">
-          {error || 'Message not found.'}
-        </div>
+        <BackLink onClick={() => navigate(-1)}>Back</BackLink>
+        <Alert>{error || 'Message not found.'}</Alert>
       </div>
     );
   }
@@ -121,9 +103,8 @@ export default function MessageDetail() {
     if (!message) return;
     setTogglingRead(true);
     try {
-      const endpoint = message.status === 'received'
-        ? `/sms/${message.id}/read`
-        : `/sms/${message.id}/unread`;
+      const endpoint =
+        message.status === 'received' ? `/sms/${message.id}/read` : `/sms/${message.id}/unread`;
       await api.put(endpoint);
       setMessage({
         ...message,
@@ -167,188 +148,149 @@ export default function MessageDetail() {
     }
   };
 
+  const canToggleRead =
+    message.direction === 'inbound' && (message.status === 'received' || message.status === 'read');
+
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => navigate(backPath)}
-          className="text-sm text-blue-600 transition-colors hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]"
-        >
-          &larr; Back to {backLabel}
-        </button>
-        <div className="flex items-center gap-2">
-          {message.direction === 'inbound' && (message.status === 'received' || message.status === 'read') && (
-            <button
-              onClick={handleToggleRead}
-              disabled={togglingRead}
-              className="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-[#073642] dark:text-[#93a1a1] dark:hover:bg-[#0a4452]"
-            >
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <BackLink onClick={() => navigate(backPath)}>Back to {backLabel}</BackLink>
+        <div className="flex flex-wrap items-center gap-2">
+          {canToggleRead && (
+            <Button variant="secondary" size="sm" onClick={handleToggleRead} loading={togglingRead}>
               {togglingRead
                 ? 'Updating...'
                 : message.status === 'received'
                   ? 'Mark as Read'
                   : 'Mark as Unread'}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="danger-soft"
+            size="sm"
             onClick={handleDelete}
-            disabled={deleting}
-            className="inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            loading={deleting}
+            icon={<TrashIcon className="h-4 w-4" />}
           >
             {deleting ? 'Deleting...' : 'Delete'}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-        <div className="flex items-start justify-between">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-[#fdf6e3]">Message Detail</h1>
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadge(message.status)}`}
-          >
-            {statusLabel(message.status)}
-          </span>
-        </div>
-
-        <div className="mt-6 space-y-4">
-          {/* Direction */}
-          <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-sm font-medium text-gray-500 dark:text-[#93a1a1]">Direction</span>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                message.direction === 'inbound'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-[#1f3e52] dark:text-[#268bd2]'
-                  : 'bg-gray-100 text-gray-700 dark:bg-[#586e75] dark:text-[#eee8d5]'
-              }`}
-            >
-              {message.direction === 'inbound' ? 'Inbound' : 'Outbound'}
+      <Card>
+        <CardHeader
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-lg">
+                <span className="font-normal text-fg-muted">{phoneLabel}</span>{' '}
+                {message.phone_number}
+              </span>
+              <Badge tone={message.direction === 'inbound' ? 'primary' : 'neutral'}>
+                {message.direction === 'inbound' ? 'Inbound' : 'Outbound'}
+              </Badge>
             </span>
-          </div>
-
-          {/* Phone Number */}
-          <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-sm font-medium text-gray-500 dark:text-[#93a1a1]">{phoneLabel}</span>
-            <span className="text-sm text-gray-900 font-medium dark:text-[#eee8d5]">{message.phone_number}</span>
-          </div>
-
-          {/* Message Body */}
-          <div className="flex gap-3">
-            <span className="w-28 shrink-0 pt-0.5 text-sm font-medium text-gray-500 dark:text-[#93a1a1]">Message</span>
-            <p className="text-sm text-gray-900 whitespace-pre-wrap dark:text-[#eee8d5]">{message.body}</p>
-          </div>
-
-          {/* Created At */}
-          <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-sm font-medium text-gray-500 dark:text-[#93a1a1]">Created</span>
-            <span className="text-sm text-gray-900 dark:text-[#eee8d5]">
+          }
+          description={formatRelativeTime(message.created_at)}
+          actions={<MessageStatusBadge status={message.status} />}
+        />
+        <CardBody>
+          <p className="rounded-lg bg-surface-muted p-4 text-sm leading-relaxed break-words whitespace-pre-wrap text-fg">
+            {message.body}
+          </p>
+          <dl className="mt-4 divide-y divide-border">
+            <DetailRow label="Created">
               {formatDateTime(message.created_at)}{' '}
-              <span className="text-gray-400 dark:text-[#93a1a1]">({formatRelativeTime(message.created_at)})</span>
-            </span>
-          </div>
-
-          {/* Updated At */}
-          <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-sm font-medium text-gray-500 dark:text-[#93a1a1]">Updated</span>
-            <span className="text-sm text-gray-900 dark:text-[#eee8d5]">
+              <span className="text-fg-subtle">({formatRelativeTime(message.created_at)})</span>
+            </DetailRow>
+            <DetailRow label="Updated">
               {formatDateTime(message.updated_at)}{' '}
-              <span className="text-gray-400 dark:text-[#93a1a1]">({formatRelativeTime(message.updated_at)})</span>
-            </span>
-          </div>
-
-          {/* Message ID */}
-          <div className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-sm font-medium text-gray-500 dark:text-[#93a1a1]">ID</span>
-            <span className="text-sm text-gray-500 font-mono dark:text-[#93a1a1]">{message.id}</span>
-          </div>
-        </div>
-      </div>
+              <span className="text-fg-subtle">({formatRelativeTime(message.updated_at)})</span>
+            </DetailRow>
+            <DetailRow label="ID">
+              <span className="font-mono text-xs break-all text-fg-muted">{message.id}</span>
+            </DetailRow>
+          </dl>
+        </CardBody>
+      </Card>
 
       {/* Reply Section */}
       {message.direction === 'inbound' && (
-        <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">Reply</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-[#93a1a1]">
-            Replying to {message.phone_number}
-          </p>
-          {replyResult && (
-            <div
-              className={`mt-3 rounded-md p-3 text-sm ${
-                replyResult.type === 'success'
-                  ? 'bg-green-50 text-green-700 dark:bg-[#213a25] dark:text-[#859900]'
-                  : 'bg-red-50 text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]'
-              }`}
-            >
-              {replyResult.message}
-            </div>
-          )}
-          <form onSubmit={handleReply} className="mt-4 space-y-3">
-            <div>
-              <label htmlFor="replyBody" className="block text-sm font-medium text-gray-700 dark:text-[#93a1a1]">
-                Message
-              </label>
-              <textarea
-                id="replyBody"
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                required
-                rows={3}
-                placeholder="Type your reply..."
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={replySending}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-[#268bd2] dark:text-[#fdf6e3] dark:hover:bg-[#2aa5f5] dark:focus:ring-[#268bd2] dark:focus:ring-offset-[#073642]"
-            >
-              {replySending ? 'Sending...' : 'Send Reply'}
-            </button>
-          </form>
-        </div>
+        <Card>
+          <CardHeader title="Reply" description={`Replying to ${message.phone_number}`} />
+          <CardBody>
+            <form onSubmit={handleReply} className="space-y-4">
+              {replyResult && (
+                <Alert tone={replyResult.type === 'success' ? 'success' : 'danger'}>
+                  {replyResult.message}
+                </Alert>
+              )}
+              <Field label="Message" htmlFor="replyBody">
+                <Textarea
+                  id="replyBody"
+                  value={replyBody}
+                  onChange={(e) => setReplyBody(e.target.value)}
+                  required
+                  rows={3}
+                  placeholder="Type your reply..."
+                />
+              </Field>
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  loading={replySending}
+                  icon={<SendIcon className="h-4 w-4" />}
+                  className="w-full sm:w-auto"
+                >
+                  {replySending ? 'Sending...' : 'Send Reply'}
+                </Button>
+              </div>
+            </form>
+          </CardBody>
+        </Card>
       )}
 
       {/* Debug Section */}
       {hasDebugInfo && (
-        <div className="rounded-lg bg-white shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
+        <Card className="overflow-hidden">
           <button
+            type="button"
             onClick={() => setDebugOpen(!debugOpen)}
-            className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-[#0a4452]"
+            aria-expanded={debugOpen}
+            className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-surface-hover sm:px-6"
           >
-            <span className="text-sm font-medium text-gray-700 dark:text-[#93a1a1]">Debug Information</span>
-            <svg
-              className={`h-5 w-5 text-gray-400 transition-transform dark:text-[#93a1a1] ${debugOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <span className="text-sm font-medium text-fg">Debug Information</span>
+            <ChevronDownIcon
+              className={cn(
+                'h-5 w-5 text-fg-subtle transition-transform',
+                debugOpen && 'rotate-180',
+              )}
+            />
           </button>
           {debugOpen && (
-            <div className="space-y-3 border-t border-gray-100 px-6 py-4 dark:border-[#586e75]">
+            <div className="space-y-4 border-t border-border px-4 py-4 sm:px-6">
               {message.modem_response && (
                 <div>
-                  <span className="mb-1 block text-xs font-medium uppercase text-gray-500 dark:text-[#93a1a1]">
+                  <span className="mb-1.5 block text-xs font-medium tracking-wide text-fg-subtle uppercase">
                     Modem Response
                   </span>
-                  <pre className="overflow-x-auto rounded-md bg-gray-50 p-3 text-xs text-gray-700 dark:bg-[#002b36] dark:text-[#93a1a1]">
+                  <pre className="overflow-x-auto rounded-lg bg-code p-3 text-xs text-code-fg">
                     {message.modem_response}
                   </pre>
                 </div>
               )}
               {message.error_message && (
                 <div>
-                  <span className="mb-1 block text-xs font-medium uppercase text-gray-500 dark:text-[#93a1a1]">
+                  <span className="mb-1.5 block text-xs font-medium tracking-wide text-fg-subtle uppercase">
                     Error Message
                   </span>
-                  <pre className="overflow-x-auto rounded-md bg-red-50 p-3 text-xs text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]">
+                  <pre className="overflow-x-auto rounded-lg bg-danger-soft p-3 text-xs whitespace-pre-wrap text-danger-soft-fg">
                     {message.error_message}
                   </pre>
                 </div>
               )}
             </div>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );

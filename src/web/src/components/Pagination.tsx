@@ -1,4 +1,5 @@
 import { PAGE_SIZE_OPTIONS } from '@/lib/usePaginatedList';
+import { Button, Select } from '@/components/ui';
 
 interface PaginationProps {
   page: number;
@@ -11,9 +12,6 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
 }
-
-const buttonClass =
-  'rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#586e75] dark:bg-[#073642] dark:text-[#93a1a1] dark:hover:bg-[#0a4452] dark:focus:ring-[#268bd2]';
 
 /**
  * Page navigation for a message list.
@@ -37,8 +35,8 @@ export default function Pagination({
   const last = Math.min(page * pageSize, total);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-[#586e75]">
-      <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-[#93a1a1]">
+    <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-fg-muted sm:justify-start">
         <span>
           {first.toLocaleString()}&ndash;{last.toLocaleString()} of {total.toLocaleString()}
         </span>
@@ -51,40 +49,36 @@ export default function Pagination({
         */}
         <label className="relative flex items-center gap-2">
           <span className="sr-only">{itemLabel} per page</span>
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#073642] dark:text-[#93a1a1] dark:focus:ring-[#268bd2]"
-          >
+          <Select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))}>
             {PAGE_SIZE_OPTIONS.map((size) => (
               <option key={size} value={size}>
                 {size} per page
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
+      <div className="flex items-center justify-between gap-2 sm:justify-end">
+        <Button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1 || busy}
-          className={buttonClass}
+          variant="secondary"
+          size="sm"
         >
           Previous
-        </button>
-        <span className="text-sm text-gray-500 dark:text-[#93a1a1]" aria-live="polite">
+        </Button>
+        <span className="text-sm whitespace-nowrap text-fg-muted" aria-live="polite">
           Page {page.toLocaleString()} of {totalPages.toLocaleString()}
         </span>
-        <button
-          type="button"
+        <Button
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages || busy}
-          className={buttonClass}
+          variant="secondary"
+          size="sm"
         >
           Next
-        </button>
+        </Button>
       </div>
     </div>
   );

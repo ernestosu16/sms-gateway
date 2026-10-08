@@ -2,43 +2,60 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
-
-interface Message {
-  id: string;
-  direction: string;
-  phone_number: string;
-  body: string;
-  status: string;
-  created_at: string;
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return 'just now';
-  if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
-  if (diffHour < 24) return `${diffHour} hour${diffHour !== 1 ? 's' : ''} ago`;
-  if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
-  return date.toLocaleDateString();
-}
+import { cn } from '@/lib/cn';
+import { formatRelativeTime } from '@/lib/format';
+import type { Message } from '@/lib/usePaginatedList';
+import {
+  Alert,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  DataTable,
+  EmptyState,
+  Field,
+  Input,
+  LoadingState,
+  MessageStatusBadge,
+  OutboxIcon,
+  SendIcon,
+  Textarea,
+  PageHeader,
+  type Column,
+} from '@/components/ui';
 
 const SMS_CHAR_LIMIT = 160;
+const RECENT_LIMIT = 20;
 
-function statusBadge(status: string) {
-  const styles: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-800 dark:bg-[#3b3200] dark:text-[#b58900]',
-    sending: 'bg-blue-100 text-blue-800 dark:bg-[#1f3e52] dark:text-[#268bd2]',
-    sent: 'bg-green-100 text-green-800 dark:bg-[#213a25] dark:text-[#859900]',
-    failed: 'bg-red-100 text-red-800 dark:bg-[#3b1f23] dark:text-[#dc322f]',
-  };
-  return styles[status] ?? 'bg-gray-100 text-gray-800 dark:bg-[#586e75] dark:text-[#eee8d5]';
-}
+const columns: Column<Message>[] = [
+  {
+    key: 'to',
+    header: 'To',
+    mobile: 'title',
+    className: 'whitespace-nowrap font-medium text-fg',
+    cell: (msg) => msg.phone_number,
+  },
+  {
+    key: 'body',
+    header: 'Message',
+    mobile: 'body',
+    className: 'w-full max-w-0 truncate text-fg-muted',
+    cell: (msg) => msg.body,
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    mobile: 'title',
+    cell: (msg) => <MessageStatusBadge status={msg.status} />,
+  },
+  {
+    key: 'time',
+    header: 'Time',
+    mobile: 'aside',
+    className: 'whitespace-nowrap text-fg-subtle',
+    cell: (msg) => formatRelativeTime(msg.created_at),
+  },
+];
 
 export default function SendSMS() {
   const navigate = useNavigate();
@@ -51,8 +68,8 @@ export default function SendSMS() {
 
   const fetchSentMessages = async () => {
     try {
-      const res = await api.get<Message[]>('/sms/outbox');
-      setSentMessages(res.data.slice(0, 20));
+      const res = await api.get<Message[]>('/sms/outbox', { params: { limit: RECENT_LIMIT } });
+      setSentMessages(res.data.slice(0, RECENT_LIMIT));
     } catch {
       // ignore
     } finally {
@@ -93,109 +110,77 @@ export default function SendSMS() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">Send SMS</h1>
+      <PageHeader title="Send SMS" description="Send a text message through the connected modem." />
 
-      {/* Send Form */}
-      <div className="max-w-2xl rounded-lg bg-white p-6 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-        {result && (
-          <div
-            className={`mb-4 rounded-md p-3 text-sm ${
-              result.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-[#213a25] dark:text-[#859900]' : 'bg-red-50 text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]'
-            }`}
-          >
-            {result.message}
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="to" className="block text-sm font-medium text-gray-700 dark:text-[#93a1a1]">
-              Phone Number
-            </label>
-            <input
-              id="to"
-              type="tel"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              required
-              placeholder="+1234567890"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]"
-            />
-          </div>
-          <div>
-            <label htmlFor="body" className="block text-sm font-medium text-gray-700 dark:text-[#93a1a1]">
-              Message
-            </label>
-            <textarea
-              id="body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              required
-              rows={4}
-              placeholder="Type your message..."
-              className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
-                overLimit
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500 dark:border-[#dc322f] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#dc322f] dark:focus:ring-[#dc322f]'
-                  : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]'
-              }`}
-            />
-            <div className="mt-1 flex justify-between text-xs">
-              <span className={overLimit ? 'text-red-600 font-medium dark:text-[#dc322f]' : 'text-gray-400 dark:text-[#93a1a1]'}>
-                {charCount}/{SMS_CHAR_LIMIT} characters
-                {overLimit && ' - message may be split into multiple SMS'}
-              </span>
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={sending || !to || !body}
-            className="rounded-md bg-blue-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-[#268bd2] dark:text-[#fdf6e3] dark:hover:bg-[#2aa5f5] dark:focus:ring-[#268bd2] dark:focus:ring-offset-[#073642]"
-          >
-            {sending ? 'Sending...' : 'Send Message'}
-          </button>
-        </form>
-      </div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+        {/* Send Form */}
+        <Card className="self-start xl:col-span-2">
+          <CardHeader title="New message" />
+          <CardBody>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {result && (
+                <Alert tone={result.type === 'success' ? 'success' : 'danger'}>
+                  {result.message}
+                </Alert>
+              )}
+              <Field label="Phone Number" htmlFor="to">
+                <Input
+                  id="to"
+                  type="tel"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  required
+                  placeholder="+1234567890"
+                />
+              </Field>
+              <Field label="Message" htmlFor="body">
+                <Textarea
+                  id="body"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  required
+                  rows={5}
+                  placeholder="Type your message..."
+                  aria-invalid={overLimit || undefined}
+                />
+                <p
+                  className={cn(
+                    'text-xs',
+                    overLimit ? 'font-medium text-warning' : 'text-fg-subtle',
+                  )}
+                >
+                  {charCount}/{SMS_CHAR_LIMIT} characters
+                  {overLimit && ' - message may be split into multiple SMS'}
+                </p>
+              </Field>
+              <Button
+                type="submit"
+                disabled={!to || !body}
+                loading={sending}
+                icon={<SendIcon className="h-4 w-4" />}
+                className="w-full sm:w-auto"
+              >
+                {sending ? 'Sending...' : 'Send Message'}
+              </Button>
+            </form>
+          </CardBody>
+        </Card>
 
-      {/* Recent Sent Messages */}
-      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">Recent Sent Messages</h2>
-        {loadingMessages ? (
-          <p className="mt-4 text-sm text-gray-500 dark:text-[#93a1a1]">Loading...</p>
-        ) : sentMessages.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-500 dark:text-[#93a1a1]">No sent messages yet.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase text-gray-500 dark:border-[#586e75] dark:text-[#93a1a1]">
-                  <th className="pb-2 pr-4">To</th>
-                  <th className="pb-2 pr-4">Message</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-[#586e75]">
-                {sentMessages.map((msg) => (
-                  <tr
-                    key={msg.id}
-                    className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-[#0a4452]"
-                    onClick={() => navigate(`/messages/${msg.id}`)}
-                  >
-                    <td className="py-3 pr-4 font-medium text-gray-900 dark:text-[#eee8d5]">{msg.phone_number}</td>
-                    <td className="py-3 pr-4 text-gray-600 max-w-xs truncate dark:text-[#93a1a1]">{msg.body}</td>
-                    <td className="py-3 pr-4">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge(msg.status)}`}
-                      >
-                        {msg.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-gray-400 dark:text-[#93a1a1]">{formatRelativeTime(msg.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {/* Recent Sent Messages */}
+        <Card className="overflow-hidden xl:col-span-3">
+          <CardHeader title="Recent Sent Messages" />
+          {loadingMessages ? (
+            <LoadingState label="Loading..." />
+          ) : sentMessages.length === 0 ? (
+            <EmptyState icon={<OutboxIcon className="h-6 w-6" />} title="No sent messages yet" />
+          ) : (
+            <DataTable
+              rows={sentMessages}
+              columns={columns}
+              onRowClick={(msg) => navigate(`/messages/${msg.id}`)}
+            />
+          )}
+        </Card>
       </div>
     </div>
   );

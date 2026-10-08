@@ -3,6 +3,27 @@ import api from '@/lib/api';
 import Pagination from '@/components/Pagination';
 import { usePaginatedList } from '@/lib/usePaginatedList';
 import { copyToClipboard } from '@/lib/clipboard';
+import { formatDate } from '@/lib/format';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  CheckIcon,
+  ConfirmInline,
+  CopyIcon,
+  DataTable,
+  EmptyState,
+  Field,
+  Input,
+  KeyIcon,
+  LoadingState,
+  PageHeader,
+  PlusIcon,
+  type Column,
+} from '@/components/ui';
 
 interface APIKey {
   id: string;
@@ -84,206 +105,144 @@ export default function APIKeys() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const columns: Column<APIKey>[] = [
+    {
+      key: 'label',
+      header: 'Label',
+      mobile: 'title',
+      className: 'font-medium text-fg',
+      cell: (k) => k.label,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      mobile: 'title',
+      cell: (k) =>
+        k.is_active ? (
+          <Badge tone="success" dot>
+            Active
+          </Badge>
+        ) : (
+          <Badge dot>Inactive</Badge>
+        ),
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      className: 'whitespace-nowrap text-fg-muted',
+      cell: (k) => formatDate(k.created_at),
+    },
+    {
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      mobile: 'footer',
+      className: 'text-right',
+      cell: (k) =>
+        confirmId === k.id ? (
+          <ConfirmInline
+            prompt="Deactivate?"
+            onConfirm={() => handleDeactivate(k.id)}
+            onCancel={() => setConfirmId(null)}
+          />
+        ) : deleteConfirmId === k.id ? (
+          <ConfirmInline
+            prompt="Delete permanently?"
+            onConfirm={() => handleDelete(k.id)}
+            onCancel={() => setDeleteConfirmId(null)}
+          />
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            {k.is_active && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setConfirmId(k.id);
+                  setDeleteConfirmId(null);
+                }}
+              >
+                Deactivate
+              </Button>
+            )}
+            <Button
+              variant="danger-soft"
+              size="sm"
+              onClick={() => {
+                setDeleteConfirmId(k.id);
+                setConfirmId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        ),
+    },
+  ];
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">API Keys</h1>
-      <p className="mt-1 text-sm text-gray-600 dark:text-[#93a1a1]">
-        Manage API keys for programmatic access.
-      </p>
+    <div className="space-y-6">
+      <PageHeader title="API Keys" description="Manage API keys for programmatic access." />
 
-      {error && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]">
-          {error}
-        </div>
-      )}
+      {error && <Alert>{error}</Alert>}
 
       {/* New key reveal banner */}
       {newKey && (
-        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4 dark:border-[#b58900] dark:bg-[#3b3200]">
-          <p className="mb-2 text-sm font-semibold text-amber-800 dark:text-[#b58900]">
+        <Alert tone="warning">
+          <p className="font-semibold">
             Your new API key has been created. Copy it now -- it will not be shown again.
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <code className="min-w-0 flex-1 break-all rounded border border-amber-200 bg-white px-3 py-2 font-mono text-sm text-gray-900 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5]">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <code className="min-w-0 flex-1 rounded-lg border border-border bg-field px-3 py-2 font-mono text-sm break-all text-fg">
               {newKey}
             </code>
-            <button
+            <Button
               onClick={() => handleCopy(newKey)}
-              className="rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+              icon={copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
             >
               {copied ? 'Copied!' : 'Copy'}
-            </button>
+            </Button>
           </div>
           <button
+            type="button"
             onClick={() => setNewKey(null)}
-            className="mt-2 text-sm text-amber-700 underline hover:text-amber-900 dark:text-[#b58900] dark:hover:text-[#d1a300]"
+            className="mt-2 text-sm underline underline-offset-2 hover:opacity-80"
           >
             Dismiss
           </button>
-        </div>
+        </Alert>
       )}
 
       {/* Create form */}
-      <div className="mt-6 rounded-lg bg-white p-6 shadow-md dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-        <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">
-          Create New API Key
-        </h2>
-        <form onSubmit={handleCreate} className="flex items-end gap-3">
-          <div className="flex-1">
-            <label
-              htmlFor="keyLabel"
-              className="mb-1 block text-sm font-medium text-gray-700 dark:text-[#93a1a1]"
-            >
-              Label
-            </label>
-            <input
-              id="keyLabel"
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              required
-              placeholder="e.g. Production Server"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-[#268bd2] dark:text-[#fdf6e3] dark:hover:bg-[#2aa5f5] dark:focus:ring-[#268bd2] dark:focus:ring-offset-[#073642]"
-          >
-            {creating ? 'Creating...' : 'Create Key'}
-          </button>
-        </form>
-      </div>
+      <Card>
+        <CardHeader title="Create New API Key" />
+        <CardBody>
+          <form onSubmit={handleCreate} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <Field label="Label" htmlFor="keyLabel" className="flex-1">
+              <Input
+                id="keyLabel"
+                type="text"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                required
+                placeholder="e.g. Production Server"
+              />
+            </Field>
+            <Button type="submit" loading={creating} icon={<PlusIcon className="h-4 w-4" />}>
+              {creating ? 'Creating...' : 'Create Key'}
+            </Button>
+          </form>
+        </CardBody>
+      </Card>
 
       {/* Keys table */}
-      <div className="mt-6 overflow-hidden rounded-lg bg-white shadow-md dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
+      <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-500 dark:text-[#93a1a1]">
-            Loading API keys...
-          </div>
+          <LoadingState label="Loading API keys..." />
         ) : keys.length === 0 ? (
-          <div className="p-6 text-center text-sm text-gray-500 dark:text-[#93a1a1]">
-            No API keys found.
-          </div>
+          <EmptyState icon={<KeyIcon className="h-6 w-6" />} title="No API keys found." />
         ) : (
-          <div className={`overflow-x-auto transition-opacity ${refreshing ? 'opacity-60' : ''}`}>
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 dark:border-[#586e75] dark:bg-[#002b36]">
-                <tr>
-                  <th className="px-6 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">Label</th>
-                  <th className="px-6 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                    Created
-                  </th>
-                  <th className="px-6 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-[#586e75]">
-                {keys.map((k) => (
-                  <tr key={k.id} className="hover:bg-gray-50 dark:hover:bg-[#0a4452]">
-                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-[#eee8d5]">
-                      {k.label}
-                    </td>
-                    <td className="px-6 py-4">
-                      {k.is_active ? (
-                        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                          Inactive
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-[#93a1a1]">
-                      {formatDate(k.created_at)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {k.is_active && (
-                          <>
-                            {confirmId === k.id ? (
-                              <>
-                                <span className="text-xs text-gray-600 dark:text-[#93a1a1]">
-                                  Deactivate?
-                                </span>
-                                <button
-                                  onClick={() => handleDeactivate(k.id)}
-                                  className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 transition-colors"
-                                >
-                                  Yes
-                                </button>
-                                <button
-                                  onClick={() => setConfirmId(null)}
-                                  className="rounded bg-gray-200 px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-300 dark:bg-[#586e75] dark:text-[#eee8d5] dark:hover:bg-[#657b83]"
-                                >
-                                  Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setConfirmId(k.id);
-                                  setDeleteConfirmId(null);
-                                }}
-                                className="rounded bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
-                              >
-                                Deactivate
-                              </button>
-                            )}
-                          </>
-                        )}
-                        {deleteConfirmId === k.id ? (
-                          <>
-                            <span className="text-xs text-gray-600 dark:text-[#93a1a1]">
-                              Delete permanently?
-                            </span>
-                            <button
-                              onClick={() => handleDelete(k.id)}
-                              className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 transition-colors"
-                            >
-                              Yes
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirmId(null)}
-                              className="rounded bg-gray-200 px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-300 dark:bg-[#586e75] dark:text-[#eee8d5] dark:hover:bg-[#657b83]"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setDeleteConfirmId(k.id);
-                              setConfirmId(null);
-                            }}
-                            className="rounded bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
+          <>
+            <DataTable rows={keys} columns={columns} busy={refreshing} />
             <Pagination
               page={page}
               pageSize={pageSize}
@@ -294,9 +253,9 @@ export default function APIKeys() {
               onPageChange={setPage}
               onPageSizeChange={setPageSize}
             />
-          </div>
+          </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
