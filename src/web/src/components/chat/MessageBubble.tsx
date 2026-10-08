@@ -12,7 +12,8 @@ interface MessageBubbleProps {
   onToggle: () => void;
   onCopy: () => void;
   onDelete: () => void;
-  onRetry: () => void;
+  /** Omitted when the number cannot be sent to, which hides Retry. */
+  onRetry?: () => void;
 }
 
 function StatusIndicator({ status }: { status: string }) {
@@ -90,13 +91,15 @@ export default function MessageBubble({
         <div className="mt-1 flex items-center gap-1.5 text-xs text-danger">
           <AlertIcon className="h-4 w-4" />
           <span>Not sent</span>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="font-semibold underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-          >
-            Retry
-          </button>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="font-semibold underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 

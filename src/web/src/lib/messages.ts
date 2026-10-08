@@ -34,10 +34,17 @@ export function normalizePhone(phone: string): string {
   return phone.trim().replace(/[\s\-().]/g, '');
 }
 
-/** Mirrors the server's modem.ValidateSMS recipient rule: optional +, up to 20 digits. */
+/**
+ * Mirrors the server's recipient rule (modem.recipientPattern): an
+ * international number with + and country code, or a 3–6 digit short code.
+ * Expects a value already passed through normalizePhone.
+ */
 export function isDialable(phone: string): boolean {
-  return /^\+?\d{1,20}$/.test(phone);
+  return /^(\+[1-9]\d{6,14}|\d{3,6})$/.test(phone);
 }
+
+export const RECIPIENT_FORMAT_HINT =
+  'Use the international format with + and country code, e.g. +15551234567 (or a 3–6 digit short code).';
 
 /** The server rejects longer bodies (modem.maxBodyRunes: 6 concatenated parts). */
 export const MAX_BODY_CHARS = 918;

@@ -1981,7 +1981,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "to": {
-                    "type": "string"
+                    "description": "To is an international number with + and country code (spaces, dashes,\ndots and parentheses are ignored) or a 3-6 digit short code.",
+                    "type": "string",
+                    "example": "+15551234567"
                 }
             }
         },
