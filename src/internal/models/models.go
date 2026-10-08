@@ -139,6 +139,24 @@ type Conversation struct {
 	MessageCount int     `json:"message_count"`
 	// UnreadCount is the number of inbound messages still in "received" status.
 	UnreadCount int `json:"unread_count"`
+	// ContactName is the saved name for the number, empty when there is none.
+	ContactName string `json:"contact_name,omitempty"`
+}
+
+// MaxContactNameRunes bounds a contact name so it fits list rows and headers.
+const MaxContactNameRunes = 100
+
+// Contact is a display name saved for a phone number.
+type Contact struct {
+	PhoneNumber string    `json:"phone_number"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// ContactRequest is the request body for saving a contact's name.
+type ContactRequest struct {
+	Name string `json:"name" example:"Jane Doe"`
 }
 
 // ConversationUpdateResponse reports how many messages a conversation-wide

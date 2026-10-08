@@ -18,15 +18,25 @@ function toneFor(phone: string): string {
   return TONES[Math.abs(hash) % TONES.length] ?? TONES[0]!;
 }
 
+/** Up to two initials from a contact name: "Jane Doe" → "JD". */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const letters = words.length > 1 ? [words[0], words[words.length - 1]] : words;
+  return letters.map((w) => [...w!][0]!.toUpperCase()).join('');
+}
+
 /**
- * International numbers show their country's flag, alphanumeric senders
- * ("BANK") their initial, and anything else (short codes) a person glyph.
+ * Named contacts show their initials with the country flag as a corner badge.
+ * Unnamed international numbers show the flag, alphanumeric senders ("BANK")
+ * their initial, and anything else (short codes) a person glyph.
  */
 export default function Avatar({
   phone,
+  name,
   size = 'md',
 }: {
   phone: string;
+  name?: string;
   size?: 'sm' | 'md' | 'lg';
 }) {
   const isNumber = /^\+?\d+$/.test(phone);
@@ -36,14 +46,29 @@ export default function Avatar({
     <div
       aria-hidden="true"
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full font-semibold',
+        'relative flex shrink-0 items-center justify-center rounded-full font-semibold',
         size === 'sm' && 'h-8 w-8 text-xs',
         size === 'md' && 'h-10 w-10 text-sm',
         size === 'lg' && 'h-16 w-16 text-xl',
         toneFor(phone),
       )}
     >
-      {flag ? (
+      {name ? (
+        <>
+          {initials(name)}
+          {flag && size !== 'sm' && (
+            <span
+              className={cn(
+                'absolute -right-1 -bottom-1 flex items-center justify-center rounded-full bg-surface leading-none ring-2 ring-surface',
+                size === 'lg' ? 'h-7 w-7 text-lg' : 'h-5 w-5 text-xs',
+              )}
+              title={countryName}
+            >
+              {flag}
+            </span>
+          )}
+        </>
+      ) : flag ? (
         <span
           className={cn('leading-none', size === 'lg' ? 'text-3xl' : 'text-lg')}
           title={countryName}

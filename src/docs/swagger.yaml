@@ -84,8 +84,29 @@ definitions:
       token:
         type: string
     type: object
+  models.Contact:
+    properties:
+      created_at:
+        type: string
+      name:
+        type: string
+      phone_number:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ContactRequest:
+    properties:
+      name:
+        example: Jane Doe
+        type: string
+    type: object
   models.Conversation:
     properties:
+      contact_name:
+        description: ContactName is the saved name for the number, empty when there
+          is none.
+        type: string
       last_message:
         $ref: '#/definitions/models.Message'
       message_count:
@@ -668,6 +689,118 @@ paths:
       summary: User logout
       tags:
       - Auth
+  /api/v1/contacts:
+    delete:
+      description: Removes the saved name for a phone number. Messages are not affected.
+      parameters:
+      - description: Phone number of the contact
+        in: query
+        name: phone
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Delete contact name
+      tags:
+      - Contacts
+    get:
+      description: Returns saved contact names ordered by name.
+      parameters:
+      - description: Only contacts whose name or number contains this text
+        in: query
+        name: q
+        type: string
+      - description: Maximum contacts to return (max 500). Omit to return all.
+        in: query
+        name: limit
+        type: integer
+      - description: Contacts to skip. Only applied together with limit.
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Total matching contacts is returned in the X-Total-Count header
+          schema:
+            items:
+              $ref: '#/definitions/models.Contact'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: List contacts
+      tags:
+      - Contacts
+    put:
+      consumes:
+      - application/json
+      description: Sets the display name for a phone number, creating the contact
+        if needed.
+      parameters:
+      - description: Phone number of the contact
+        in: query
+        name: phone
+        required: true
+        type: string
+      - description: Contact name
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ContactRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Contact'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Save contact name
+      tags:
+      - Contacts
   /api/v1/health:
     get:
       description: Checks database connectivity and modem status, returning the overall

@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatDayLabel, isSameDay } from '@/lib/format';
-import { isDialable, notifyUnreadChanged } from '@/lib/messages';
+import { isDialable, MAX_CONTACT_NAME, notifyConversationsChanged } from '@/lib/messages';
+import { useContact } from '@/lib/useContact';
 import { describePhone } from '@/lib/phone';
 import { useThread, type ThreadMessage } from '@/lib/useChat';
 import Avatar from '@/components/chat/Avatar';
@@ -14,10 +16,14 @@ import {
   ArrowDownIcon,
   ArrowLeftIcon,
   Button,
+  CheckIcon,
   CopyIcon,
+  Input,
   LoadingState,
+  PencilIcon,
   TrashIcon,
   useConfirm,
+  XIcon,
 } from '@/components/ui';
 
 // Distance from an edge, in px, that still counts as "at" that edge.
@@ -37,6 +43,14 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
   const { confirm, dialog } = useConfirm();
   const canReply = isDialable(phone);
   const contact = describePhone(phone);
+  const { name: contactName, save: saveContact } = useContact(phone);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const displayName = contactName || contact.formatted;
+  const subtitle = contactName
+    ? [contact.formatted, contact.countryName].filter(Boolean).join(' · ')
+    : contact.countryName;
   const location = useLocation();
   const scrollRef = useRef<ComponentRef<'div'>>(null);
   const atBottomRef = useRef(true);
@@ -121,7 +135,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
     try {
       await remove(msg);
       setExpandedId(null);
-      notifyUnreadChanged();
+      notifyConversationsChanged();
     } catch {
       setNotice('Failed to delete message');
     }
@@ -132,9 +146,8 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
       title: 'Delete conversation?',
       description: (
         <>
-          Every message sent to or received from{' '}
-          <strong className="text-fg">{contact.formatted}</strong> is removed. This cannot be
-          undone.
+          Every message sent to or received from <strong className="text-fg">{displayName}</strong>{' '}
+          is removed. This cannot be undone.
         </>
       ),
       confirmLabel: 'Delete conversation',
@@ -142,10 +155,31 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
     if (!ok) return;
     try {
       await api.delete('/sms/conversations', { params: { phone } });
-      notifyUnreadChanged();
+      notifyConversationsChanged();
       onDeleted();
     } catch {
       setNotice('Failed to delete conversation');
+    }
+  };
+
+  const startEditingName = () => {
+    setNameDraft(contactName);
+    setEditingName(true);
+  };
+
+  const commitName = async () => {
+    setSavingName(true);
+    try {
+      await saveContact(nameDraft);
+      setEditingName(false);
+      setNotice(nameDraft.trim() ? 'Name saved' : 'Name removed');
+    } catch (err) {
+      setNotice(
+        (isAxiosError(err) && (err.response?.data as { error?: string } | undefined)?.error) ||
+          'Failed to save name',
+      );
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -168,37 +202,90 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
         >
           <ArrowLeftIcon />
         </Button>
-        <Avatar phone={phone} size="sm" />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate leading-tight font-semibold text-fg">{contact.formatted}</h2>
-          {contact.countryName && (
-            <p className="truncate text-xs text-fg-subtle">{contact.countryName}</p>
-          )}
-        </div>
-        {notice && (
-          <span role="status" className="hidden text-xs text-fg-muted sm:inline">
-            {notice}
-          </span>
+        <Avatar phone={phone} name={contactName} size="sm" />
+        {editingName ? (
+          <form
+            className="flex min-w-0 flex-1 items-center gap-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              commitName();
+            }}
+          >
+            <label htmlFor="contact-name" className="sr-only">
+              Contact name
+            </label>
+            <Input
+              id="contact-name"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setEditingName(false);
+              }}
+              maxLength={MAX_CONTACT_NAME}
+              placeholder="Contact name"
+              autoFocus
+              className="h-9"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              loading={savingName}
+              aria-label="Save name"
+              title="Save name (Enter)"
+            >
+              {!savingName && <CheckIcon className="h-[18px] w-[18px]" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setEditingName(false)}
+              aria-label="Cancel"
+              title="Cancel (Esc)"
+            >
+              <XIcon className="h-[18px] w-[18px]" />
+            </Button>
+          </form>
+        ) : (
+          <>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate leading-tight font-semibold text-fg">{displayName}</h2>
+              {subtitle && <p className="truncate text-xs text-fg-subtle">{subtitle}</p>}
+            </div>
+            {notice && (
+              <span role="status" className="hidden text-xs text-fg-muted sm:inline">
+                {notice}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={startEditingName}
+              aria-label={contactName ? 'Edit contact name' : 'Add contact name'}
+              title={contactName ? 'Edit name' : 'Add name'}
+            >
+              <PencilIcon className="h-[18px] w-[18px]" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleCopy(phone, 'Number')}
+              aria-label="Copy phone number"
+              title="Copy phone number"
+            >
+              <CopyIcon className="h-[18px] w-[18px]" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDeleteConversation}
+              aria-label="Delete conversation"
+              title="Delete conversation"
+              className="hover:bg-danger-soft hover:text-danger-soft-fg"
+            >
+              <TrashIcon className="h-[18px] w-[18px]" />
+            </Button>
+          </>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => handleCopy(phone, 'Number')}
-          aria-label="Copy phone number"
-          title="Copy phone number"
-        >
-          <CopyIcon className="h-[18px] w-[18px]" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleDeleteConversation}
-          aria-label="Delete conversation"
-          title="Delete conversation"
-          className="hover:bg-danger-soft hover:text-danger-soft-fg"
-        >
-          <TrashIcon className="h-[18px] w-[18px]" />
-        </Button>
       </header>
 
       {notice && (
@@ -213,7 +300,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
           onScroll={handleScroll}
           role="log"
           aria-live="polite"
-          aria-label={`Messages with ${contact.formatted}`}
+          aria-label={`Messages with ${displayName}`}
           className="h-full overflow-y-auto overscroll-contain bg-app px-3 pb-4 sm:px-6"
         >
           {hasOlder && (

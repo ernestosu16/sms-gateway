@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/mattboston/sms-gateway/internal/database"
@@ -165,5 +166,59 @@ func TestHandleSendSMS_RecipientFormat(t *testing.T) {
 				t.Errorf("stored conversations = %+v, want one with %s", got, tt.wantPhone)
 			}
 		})
+	}
+}
+
+func TestHandleContacts(t *testing.T) {
+	_, repo := newSMSTestHandler(t)
+	handler := NewContactHandler(repo)
+	q := "?phone=" + url.QueryEscape("+1 555 000 0001")
+
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+	}{
+		{"saves trimmed name", `{"name":"  Jane  "}`, http.StatusOK},
+		{"empty name", `{"name":"   "}`, http.StatusBadRequest},
+		{"control character", `{"name":"Ja\u0007ne"}`, http.StatusBadRequest},
+		{"too long", `{"name":"` + strings.Repeat("a", models.MaxContactNameRunes+1) + `"}`, http.StatusBadRequest},
+		{"bad json", `{`, http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.HandleSaveContact(w, httptest.NewRequest(http.MethodPut, "/x"+q, strings.NewReader(tt.body)))
+			if w.Code != tt.wantCode {
+				t.Errorf("status = %d, want %d: %s", w.Code, tt.wantCode, w.Body)
+			}
+		})
+	}
+
+	if c, err := repo.GetContact("+15550000001"); err != nil || c.Name != "Jane" {
+		t.Fatalf("stored contact = %+v, %v; want Jane", c, err)
+	}
+
+	w := httptest.NewRecorder()
+	handler.HandleSaveContact(w, httptest.NewRequest(http.MethodPut, "/x", strings.NewReader(`{"name":"x"}`)))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("save without phone: status = %d, want 400", w.Code)
+	}
+
+	w = httptest.NewRecorder()
+	handler.HandleListContacts(w, httptest.NewRequest(http.MethodGet, "/x", nil))
+	if w.Header().Get("X-Total-Count") != "1" {
+		t.Errorf("list X-Total-Count = %q, want 1", w.Header().Get("X-Total-Count"))
+	}
+
+	w = httptest.NewRecorder()
+	handler.HandleDeleteContact(w, httptest.NewRequest(http.MethodDelete, "/x"+q, nil))
+	if w.Code != http.StatusOK {
+		t.Errorf("delete: status = %d, want 200", w.Code)
+	}
+	w = httptest.NewRecorder()
+	handler.HandleDeleteContact(w, httptest.NewRequest(http.MethodDelete, "/x"+q, nil))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("second delete: status = %d, want 404", w.Code)
 	}
 }
