@@ -1,23 +1,82 @@
-import { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { cn } from '@/lib/cn';
 import ThemeModeControl from '@/components/ThemeModeControl';
+import {
+  DashboardIcon,
+  InboxIcon,
+  KeyIcon,
+  LogoutIcon,
+  MenuIcon,
+  MessageIcon,
+  OutboxIcon,
+  SendIcon,
+  SignalIcon,
+  UsersIcon,
+  WebhookIcon,
+  XIcon,
+} from '@/components/ui';
 
-const navItems = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/send', label: 'Send SMS' },
-  { to: '/inbox', label: 'Inbox' },
-  { to: '/outbox', label: 'Outbox' },
-  { to: '/apikeys', label: 'API Keys' },
-  { to: '/webhooks', label: 'Webhooks' },
-  { to: '/users', label: 'Users' },
-  { to: '/modem', label: 'Modem Test' },
+const navSections = [
+  {
+    title: 'Messaging',
+    items: [
+      { to: '/', label: 'Dashboard', Icon: DashboardIcon },
+      { to: '/send', label: 'Send SMS', Icon: SendIcon },
+      { to: '/inbox', label: 'Inbox', Icon: InboxIcon },
+      { to: '/outbox', label: 'Outbox', Icon: OutboxIcon },
+    ],
+  },
+  {
+    title: 'Settings',
+    items: [
+      { to: '/apikeys', label: 'API Keys', Icon: KeyIcon },
+      { to: '/webhooks', label: 'Webhooks', Icon: WebhookIcon },
+      { to: '/users', label: 'Users', Icon: UsersIcon },
+      { to: '/modem', label: 'Modem Test', Icon: SignalIcon },
+    ],
+  },
 ];
+
+/** Section name for the compact mobile header. */
+function sectionTitle(pathname: string): string {
+  if (pathname.startsWith('/messages/')) return 'Message';
+  for (const section of navSections) {
+    const item = section.items.find((i) => i.to === pathname);
+    if (item) return item.label;
+  }
+  return 'SMS Gateway';
+}
+
+function Brand() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-fg">
+        <MessageIcon className="h-4.5 w-4.5" />
+      </span>
+      <span className="text-base font-semibold tracking-tight text-sidebar-active-fg">
+        SMS Gateway
+      </span>
+    </div>
+  );
+}
 
 export default function Layout() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // The drawer is modal on phones; Escape should dismiss it like any dialog.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sidebarOpen]);
 
   const handleLogout = () => {
     logout();
@@ -25,93 +84,109 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-[#002b36]">
+    <div className="flex h-dvh bg-app">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-20 bg-black/50 backdrop-blur-[2px] lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-gray-900 text-white transition-transform duration-200 lg:static lg:translate-x-0 dark:bg-[#073642] dark:text-[#93a1a1] ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={cn(
+          'fixed inset-y-0 left-0 z-30 flex w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-fg transition-transform duration-200 lg:static lg:w-64 lg:translate-x-0',
+          sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full',
+        )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-gray-700 px-6 dark:border-[#586e75]">
-          <span className="text-lg font-semibold">SMS Gateway</span>
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border px-5">
+          <Brand />
           <button
-            className="lg:hidden text-gray-400 hover:text-white dark:text-[#93a1a1] dark:hover:text-[#fdf6e3]"
+            className="rounded-md p-1.5 text-sidebar-fg hover:bg-sidebar-active hover:text-sidebar-active-fg lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation"
           >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <XIcon />
           </button>
         </div>
-        <nav className="mt-4 px-3 space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-gray-800 text-white dark:bg-[#0a4452] dark:text-[#fdf6e3]'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white dark:text-[#93a1a1] dark:hover:bg-[#0a4452] dark:hover:text-[#fdf6e3]'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
+
+        <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5" aria-label="Main">
+          {navSections.map((section) => (
+            <div key={section.title}>
+              <p className="px-3 pb-2 text-[11px] font-semibold tracking-wider uppercase opacity-60">
+                {section.title}
+              </p>
+              <div className="space-y-0.5">
+                {section.items.map(({ to, label, Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === '/'}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-sidebar-active text-sidebar-active-fg'
+                          : 'hover:bg-sidebar-active/60 hover:text-sidebar-active-fg',
+                      )
+                    }
+                  >
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
+
+        <div className="shrink-0 space-y-3 border-t border-sidebar-border p-4">
+          <ThemeModeControl className="flex w-full border-sidebar-border bg-sidebar-active/40" />
+          {user && (
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-active text-sm font-semibold text-sidebar-active-fg uppercase">
+                {user.username.slice(0, 1)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-sidebar-active-fg">
+                  {user.username}
+                </p>
+                <p className="text-xs opacity-70">{user.is_admin ? 'Administrator' : 'User'}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="rounded-md p-2 hover:bg-sidebar-active hover:text-sidebar-active-fg"
+                aria-label="Log out"
+                title="Log out"
+              >
+                <LogoutIcon className="h-[18px] w-[18px]" />
+              </button>
+            </div>
+          )}
+        </div>
       </aside>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6 dark:border-[#586e75] dark:bg-[#002b36]">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile header */}
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 lg:hidden">
           <button
-            className="lg:hidden text-gray-600 hover:text-gray-900 dark:text-[#93a1a1] dark:hover:text-[#fdf6e3]"
+            className="-ml-1.5 rounded-md p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation"
           >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
+            <MenuIcon />
           </button>
-          <div className="flex-1 lg:ml-0" />
-          <div className="flex items-center gap-4">
-            <ThemeModeControl />
-            {user && (
-              <span className="text-sm text-gray-600 dark:text-[#93a1a1]">{user.username}</span>
-            )}
-            <button
-              onClick={handleLogout}
-              className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-[#073642] dark:text-[#93a1a1] dark:hover:bg-[#0a4452]"
-            >
-              Logout
-            </button>
-          </div>
+          <span className="truncate text-base font-semibold text-fg">{sectionTitle(pathname)}</span>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

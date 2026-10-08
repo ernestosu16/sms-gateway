@@ -145,10 +145,10 @@ def sms_webhook():
 
 type SnippetLanguage = keyof typeof VERIFY_SNIPPETS;
 
-const sectionTitleClass = 'text-base font-semibold text-gray-800 dark:text-[#eee8d5]';
-const textClass = 'text-sm text-gray-600 dark:text-[#93a1a1]';
+const sectionTitleClass = 'text-base font-semibold text-fg';
+const textClass = 'text-sm text-fg-muted';
 const inlineCodeClass =
-  'rounded bg-gray-100 px-1 py-0.5 font-mono text-xs text-gray-800 dark:bg-[#002b36] dark:text-[#eee8d5]';
+  'rounded bg-surface-muted px-1 py-0.5 font-mono text-xs break-words text-fg';
 
 function CodeBlock({ code, label }: { code: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -164,18 +164,18 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-md border border-gray-200 dark:border-[#586e75]">
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-[#586e75] dark:bg-[#002b36]">
-        <span className="text-xs font-medium text-gray-500 dark:text-[#93a1a1]">{label}</span>
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="flex items-center justify-between border-b border-border bg-surface-muted px-3 py-1.5">
+        <span className="truncate text-xs font-medium text-fg-subtle">{label}</span>
         <button
           type="button"
           onClick={handleCopy}
-          className="text-xs text-blue-600 hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]"
+          className="shrink-0 text-xs font-medium text-primary hover:text-primary-hover"
         >
           {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
-      <pre className="overflow-x-auto bg-gray-900 p-4 text-xs leading-relaxed text-gray-100 dark:bg-[#00212b] dark:text-[#eee8d5]">
+      <pre className="overflow-x-auto bg-code p-4 text-xs leading-relaxed text-code-fg">
         <code>{code}</code>
       </pre>
     </div>
@@ -203,8 +203,8 @@ function Tabs<T extends string>({
           onClick={() => onChange(option)}
           className={`rounded-md px-3 py-1 font-mono text-xs transition-colors ${
             option === value
-              ? 'bg-blue-600 text-white dark:bg-[#268bd2] dark:text-[#fdf6e3]'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-[#002b36] dark:text-[#93a1a1] dark:hover:bg-[#0a4452]'
+              ? 'bg-primary text-primary-fg'
+              : 'bg-surface-muted text-fg-muted hover:bg-surface-hover hover:text-fg'
           }`}
         >
           {option}
@@ -220,16 +220,14 @@ function Tabs<T extends string>({
  */
 function ReferenceList({ rows }: { rows: [string, string][] }) {
   return (
-    <dl className="divide-y divide-gray-100 rounded-md border border-gray-200 dark:divide-[#586e75] dark:border-[#586e75]">
+    <dl className="divide-y divide-border rounded-lg border border-border">
       {rows.map(([name, description]) => (
         <div
           key={name}
           className="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] sm:gap-4"
         >
-          <dt className="break-all font-mono text-xs text-gray-900 sm:pt-0.5 dark:text-[#eee8d5]">
-            {name}
-          </dt>
-          <dd className="text-sm text-gray-600 dark:text-[#93a1a1]">{description}</dd>
+          <dt className="font-mono text-xs break-all text-fg sm:pt-0.5">{name}</dt>
+          <dd className="text-sm text-fg-muted">{description}</dd>
         </div>
       ))}
     </dl>
@@ -244,12 +242,10 @@ export default function WebhookDocs({ id }: { id?: string }) {
   return (
     <section
       id={id}
-      className="mt-6 scroll-mt-6 space-y-6 rounded-lg bg-white p-4 shadow-md sm:p-6 dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]"
+      className="scroll-mt-6 space-y-6 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6"
     >
       <div>
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">
-          What your server receives
-        </h2>
+        <h2 className="text-lg font-semibold text-fg">What your server receives</h2>
         <p className={`mt-1 ${textClass}`}>
           For every subscribed event the gateway sends an HTTP{' '}
           <code className={inlineCodeClass}>POST</code> to the Delivery URL with a JSON body.

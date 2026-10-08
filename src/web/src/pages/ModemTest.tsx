@@ -1,6 +1,22 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
+import { cn } from '@/lib/cn';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Field,
+  Input,
+  PageHeader,
+  RefreshIcon,
+  Spinner,
+  TerminalIcon,
+  type Tone,
+} from '@/components/ui';
 
 interface ModemStatus {
   status: string;
@@ -26,14 +42,41 @@ function SignalBars({ strength }: { strength: number }) {
       {[1, 2, 3, 4].map((level) => (
         <div
           key={level}
-          className={`w-2 rounded-sm transition-colors ${
-            level <= bars ? 'bg-green-500 dark:bg-[#859900]' : 'bg-gray-200 dark:bg-[#586e75]'
-          }`}
+          className={cn(
+            'w-2 rounded-sm transition-colors',
+            level <= bars ? 'bg-success' : 'bg-border-strong',
+          )}
           style={{ height: `${level * 6 + 4}px` }}
         />
       ))}
     </div>
   );
+}
+
+function qualityTone(quality: string): Tone {
+  if (quality === 'excellent' || quality === 'good') return 'success';
+  if (quality === 'fair') return 'warning';
+  return 'danger';
+}
+
+function PanelState({
+  loading,
+  error,
+  children,
+}: {
+  loading: boolean;
+  error: string;
+  children: ReactNode;
+}) {
+  if (loading) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-fg-muted">
+        <Spinner className="h-4 w-4" /> Loading...
+      </p>
+    );
+  }
+  if (error) return <p className="text-sm text-danger">{error}</p>;
+  return <>{children}</>;
 }
 
 export default function ModemTest() {
@@ -100,7 +143,11 @@ export default function ModemTest() {
     try {
       const response = await api.post('/modem/at', { command: cmd });
       setHistory((prev) => [
-        { command: cmd, response: response.data.response ?? JSON.stringify(response.data), timestamp: new Date() },
+        {
+          command: cmd,
+          response: response.data.response ?? JSON.stringify(response.data),
+          timestamp: new Date(),
+        },
         ...prev,
       ]);
       setCommand('');
@@ -109,7 +156,10 @@ export default function ModemTest() {
         err instanceof Error
           ? err.message
           : typeof err === 'object' && err !== null && 'response' in err
-            ? String((err as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Command failed.')
+            ? String(
+                (err as { response?: { data?: { error?: string } } }).response?.data?.error ??
+                  'Command failed.',
+              )
             : 'Command failed.';
       setCommandError(message);
       setHistory((prev) => [
@@ -129,150 +179,133 @@ export default function ModemTest() {
     });
   };
 
+  const refreshing = statusLoading || signalLoading;
+  const connected = status?.status === 'ok';
+
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">Modem Test</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-[#93a1a1]">Test modem connectivity and AT commands.</p>
-        </div>
-        <button
-          onClick={handleRefresh}
-          disabled={statusLoading || signalLoading}
-          className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-[#073642] dark:text-[#93a1a1] dark:hover:bg-[#0a4452] dark:focus:ring-[#268bd2] dark:focus:ring-offset-[#002b36]"
-        >
-          {statusLoading || signalLoading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Modem Test"
+        description="Test modem connectivity and AT commands."
+        actions={
+          <Button
+            variant="secondary"
+            onClick={handleRefresh}
+            loading={refreshing}
+            icon={<RefreshIcon className="h-4 w-4" />}
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        }
+      />
 
       {/* Status and Signal cards */}
-      <div className="mt-6 grid gap-6 sm:grid-cols-2">
-        {/* Modem Status */}
-        <div className="rounded-lg bg-white p-6 shadow-md dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">Modem Status</h2>
-          {statusLoading ? (
-            <p className="text-sm text-gray-500 dark:text-[#93a1a1]">Loading...</p>
-          ) : statusError ? (
-            <p className="text-sm text-red-600 dark:text-[#dc322f]">{statusError}</p>
-          ) : status ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`h-3 w-3 rounded-full ${
-                    status.status === 'ok' ? 'bg-green-500' : 'bg-red-500'
-                  }`}
-                />
-                <span className="text-sm font-medium text-gray-900 dark:text-[#eee8d5]">
-                  {status.status === 'ok' ? 'Connected' : 'Disconnected'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 dark:text-[#93a1a1]">No status data available.</p>
-          )}
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
+        <Card>
+          <CardHeader title="Modem Status" />
+          <CardBody>
+            <PanelState loading={statusLoading} error={statusError}>
+              {status ? (
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn('h-3 w-3 rounded-full', connected ? 'bg-success' : 'bg-danger')}
+                  />
+                  <span className="text-lg font-semibold text-fg">
+                    {connected ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-sm text-fg-muted">No status data available.</p>
+              )}
+            </PanelState>
+          </CardBody>
+        </Card>
 
-        {/* Signal Strength */}
-        <div className="rounded-lg bg-white p-6 shadow-md dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">Signal Strength</h2>
-          {signalLoading ? (
-            <p className="text-sm text-gray-500 dark:text-[#93a1a1]">Loading...</p>
-          ) : signalError ? (
-            <p className="text-sm text-red-600 dark:text-[#dc322f]">{signalError}</p>
-          ) : signal ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-4">
-                <SignalBars strength={signal.signal} />
-                <span className="text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">
-                  {signal.signal}
-                </span>
-                <span className="text-sm text-gray-500 dark:text-[#93a1a1]">/ 31</span>
-              </div>
-              <div>
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    signal.quality === 'excellent' || signal.quality === 'good'
-                      ? 'bg-green-100 text-green-800'
-                      : signal.quality === 'fair'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                  }`}
-                >
-                  {signal.quality}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500 dark:text-[#93a1a1]">No signal data available.</p>
-          )}
-        </div>
+        <Card>
+          <CardHeader title="Signal Strength" />
+          <CardBody>
+            <PanelState loading={signalLoading} error={signalError}>
+              {signal ? (
+                <div className="flex flex-wrap items-center gap-4">
+                  <SignalBars strength={signal.signal} />
+                  <span className="text-2xl font-semibold text-fg">
+                    {signal.signal}
+                    <span className="ml-1 text-sm font-normal text-fg-subtle">/ 31</span>
+                  </span>
+                  <Badge tone={qualityTone(signal.quality)} className="capitalize">
+                    {signal.quality}
+                  </Badge>
+                </div>
+              ) : (
+                <p className="text-sm text-fg-muted">No signal data available.</p>
+              )}
+            </PanelState>
+          </CardBody>
+        </Card>
       </div>
 
       {/* AT Command Section - Admin only */}
       {isAdmin && (
-        <div className="mt-6 rounded-lg bg-white p-6 shadow-md dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">AT Command</h2>
-          <form onSubmit={handleSendCommand} className="flex items-end gap-3">
-            <div className="flex-1">
-              <label htmlFor="atCommand" className="mb-1 block text-sm font-medium text-gray-700 dark:text-[#93a1a1]">
-                Command
-              </label>
-              <input
-                id="atCommand"
-                type="text"
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                required
-                placeholder="e.g. AT+CSQ"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={sending}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-[#268bd2] dark:text-[#fdf6e3] dark:hover:bg-[#2aa5f5] dark:focus:ring-[#268bd2] dark:focus:ring-offset-[#073642]"
+        <Card>
+          <CardHeader
+            title="AT Command"
+            actions={
+              history.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setHistory([])}>
+                  Clear history
+                </Button>
+              )
+            }
+          />
+          <CardBody className="space-y-4">
+            <form
+              onSubmit={handleSendCommand}
+              className="flex flex-col gap-3 sm:flex-row sm:items-end"
             >
-              {sending ? 'Sending...' : 'Send'}
-            </button>
-          </form>
+              <Field label="Command" htmlFor="atCommand" className="flex-1">
+                <Input
+                  id="atCommand"
+                  type="text"
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
+                  required
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="e.g. AT+CSQ"
+                  className="font-mono"
+                />
+              </Field>
+              <Button type="submit" loading={sending} icon={<TerminalIcon className="h-4 w-4" />}>
+                {sending ? 'Sending...' : 'Send'}
+              </Button>
+            </form>
 
-          {commandError && (
-            <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]">
-              {commandError}
-            </div>
-          )}
+            {commandError && <Alert>{commandError}</Alert>}
 
-          {/* Command History */}
-          {history.length > 0 && (
-            <div className="mt-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-[#93a1a1]">Command History</h3>
-                <button
-                  onClick={() => setHistory([])}
-                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-[#93a1a1] dark:hover:text-[#eee8d5]"
-                >
-                  Clear
-                </button>
-              </div>
+            {/* Command History */}
+            {history.length > 0 && (
               <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-fg">Command History</h3>
                 {history.map((entry, index) => (
-                  <div
-                    key={index}
-                    className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-[#586e75] dark:bg-[#002b36]"
-                  >
-                    <div className="mb-1 flex items-center justify-between">
-                      <code className="text-sm font-semibold text-blue-700">{entry.command}</code>
-                      <span className="text-xs text-gray-400 dark:text-[#93a1a1]">{formatTime(entry.timestamp)}</span>
+                  <div key={index} className="overflow-hidden rounded-lg border border-border">
+                    <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-muted px-3 py-2">
+                      <code className="truncate font-mono text-sm font-semibold text-primary">
+                        {entry.command}
+                      </code>
+                      <span className="shrink-0 text-xs text-fg-subtle">
+                        {formatTime(entry.timestamp)}
+                      </span>
                     </div>
-                    <pre className="whitespace-pre-wrap rounded bg-gray-900 p-3 font-mono text-xs text-green-400 overflow-x-auto">
+                    <pre className="overflow-x-auto bg-code p-3 font-mono text-xs whitespace-pre-wrap break-words text-code-fg">
                       {entry.response}
                     </pre>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </CardBody>
+        </Card>
       )}
     </div>
   );

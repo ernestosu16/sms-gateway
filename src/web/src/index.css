@@ -1,2 +1,125 @@
 @import 'tailwindcss';
 @custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Semantic design tokens. Components use these names (bg-surface, text-fg,
+ * border-border, bg-primary, ...) instead of raw palette values, so the light
+ * theme and the Solarized dark theme are defined once, here, and every view
+ * follows them without per-element dark: overrides.
+ */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-app: #f3f5f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-surface-hover: #f1f5f9;
+  --color-field: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+
+  --color-fg: #0f172a;
+  --color-fg-muted: #475569;
+  --color-fg-subtle: #64748b;
+
+  --color-sidebar: #0f172a;
+  --color-sidebar-fg: #cbd5e1;
+  --color-sidebar-active: #1e293b;
+  --color-sidebar-active-fg: #ffffff;
+  --color-sidebar-border: #1e293b;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-fg: #ffffff;
+  --color-primary-soft: #dbeafe;
+  --color-primary-soft-fg: #1d4ed8;
+
+  --color-success: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-success-soft-fg: #166534;
+
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+  --color-warning-soft-fg: #92400e;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-fg: #ffffff;
+  --color-danger-soft: #fee2e2;
+  --color-danger-soft-fg: #b91c1c;
+
+  --color-accent-soft: #f3e8ff;
+  --color-accent-soft-fg: #6b21a8;
+
+  --color-neutral-soft: #f1f5f9;
+  --color-neutral-soft-fg: #475569;
+
+  --color-code: #0f172a;
+  --color-code-fg: #e2e8f0;
+}
+
+/* Solarized dark. */
+.dark {
+  --color-app: #002b36;
+  --color-surface: #073642;
+  --color-surface-muted: #002b36;
+  --color-surface-hover: #0a4452;
+  --color-field: #002b36;
+  --color-border: #2f5560;
+  --color-border-strong: #586e75;
+
+  --color-fg: #eee8d5;
+  --color-fg-muted: #93a1a1;
+  --color-fg-subtle: #839496;
+
+  --color-sidebar: #00212b;
+  --color-sidebar-fg: #93a1a1;
+  --color-sidebar-active: #0a4452;
+  --color-sidebar-active-fg: #fdf6e3;
+  --color-sidebar-border: #073642;
+
+  --color-primary: #268bd2;
+  --color-primary-hover: #2aa5f5;
+  --color-primary-fg: #fdf6e3;
+  --color-primary-soft: #1f3e52;
+  --color-primary-soft-fg: #6cb6e8;
+
+  --color-success: #859900;
+  --color-success-soft: #213a25;
+  --color-success-soft-fg: #a4bd00;
+
+  --color-warning: #b58900;
+  --color-warning-soft: #3b3200;
+  --color-warning-soft-fg: #d1a300;
+
+  --color-danger: #dc322f;
+  --color-danger-hover: #e5524f;
+  --color-danger-fg: #fdf6e3;
+  --color-danger-soft: #3b1f23;
+  --color-danger-soft-fg: #ef6d6a;
+
+  --color-accent-soft: #2e2546;
+  --color-accent-soft-fg: #a8a3e0;
+
+  --color-neutral-soft: #0a4452;
+  --color-neutral-soft-fg: #93a1a1;
+
+  --color-code: #00212b;
+  --color-code-fg: #eee8d5;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-app font-sans text-fg antialiased;
+  }
+
+  input[type='checkbox'] {
+    @apply h-4 w-4 cursor-pointer rounded border-border-strong accent-primary;
+  }
+}

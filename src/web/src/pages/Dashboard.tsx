@@ -1,6 +1,31 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
+import { cn } from '@/lib/cn';
+import { formatRelativeTime } from '@/lib/format';
+import type { Message } from '@/lib/usePaginatedList';
+import {
+  Alert,
+  AlertIcon,
+  Button,
+  CheckCircleIcon,
+  Card,
+  CardBody,
+  CardHeader,
+  DirectionBadge,
+  EmptyState,
+  Field,
+  Input,
+  LoadingState,
+  MessageIcon,
+  MessageStatusBadge,
+  OutboxIcon,
+  InboxIcon,
+  PageHeader,
+  SendIcon,
+  SignalIcon,
+  Textarea,
+} from '@/components/ui';
 
 interface ModemStatus {
   status: string;
@@ -9,15 +34,6 @@ interface ModemStatus {
 interface ModemSignal {
   signal: number;
   quality: string;
-}
-
-interface Message {
-  id: string;
-  direction: 'inbound' | 'outbound';
-  phone_number: string;
-  body: string;
-  status: string;
-  created_at: string;
 }
 
 // Whole-table counts from /sms/stats. Deriving these from a page of messages
@@ -34,22 +50,6 @@ interface MessageStats {
 
 /** How many recent messages the dashboard shows, and therefore fetches. */
 const RECENT_LIMIT = 10;
-
-function formatRelativeTime(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return 'just now';
-  if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
-  if (diffHour < 24) return `${diffHour} hour${diffHour !== 1 ? 's' : ''} ago`;
-  if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? 's' : ''} ago`;
-  return date.toLocaleDateString();
-}
 
 function signalBars(quality: string): number {
   switch (quality) {
@@ -166,11 +166,7 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-gray-500 dark:text-[#93a1a1]">Loading dashboard...</p>
-      </div>
-    );
+    return <LoadingState label="Loading dashboard..." />;
   }
 
   const modemOk = modemStatus?.status === 'ok';
@@ -178,189 +174,202 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">Dashboard</h1>
+      <PageHeader title="Dashboard" description="Modem health and message activity at a glance." />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Modem Status */}
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <div className="text-sm font-medium text-gray-500 dark:text-[#93a1a1]">Modem Status</div>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className={`inline-block h-3 w-3 rounded-full ${modemOk ? 'bg-green-500' : 'bg-red-500'}`}
-            />
-            <span
-              className={`text-lg font-semibold ${modemOk ? 'text-green-700 dark:text-[#859900]' : 'text-red-700 dark:text-[#dc322f]'}`}
-            >
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Modem"
+          icon={
+            modemOk ? <CheckCircleIcon className="h-5 w-5" /> : <AlertIcon className="h-5 w-5" />
+          }
+          tone={modemOk ? 'success' : 'danger'}
+        >
+          <span className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              {modemOk && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+              )}
+              <span
+                className={cn(
+                  'relative inline-flex h-2.5 w-2.5 rounded-full',
+                  modemOk ? 'bg-success' : 'bg-danger',
+                )}
+              />
+            </span>
+            <span className={modemOk ? 'text-success' : 'text-danger'}>
               {modemOk ? 'Online' : 'Offline'}
             </span>
-          </div>
-        </div>
+          </span>
+        </StatCard>
 
-        {/* Signal Strength */}
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <div className="text-sm font-medium text-gray-500 dark:text-[#93a1a1]">
-            Signal Strength
-          </div>
-          <div className="mt-2 flex items-end gap-1">
-            {[1, 2, 3, 4, 5].map((level) => (
-              <div
-                key={level}
-                className={`w-2 rounded-sm ${bars >= level ? 'bg-green-500 dark:bg-[#859900]' : 'bg-gray-200 dark:bg-[#586e75]'}`}
-                style={{ height: `${level * 5 + 4}px` }}
-              />
-            ))}
-            <span className="ml-2 text-sm text-gray-600 capitalize dark:text-[#93a1a1]">
+        <StatCard label="Signal" icon={<SignalIcon className="h-5 w-5" />} tone="primary">
+          <span className="flex items-end gap-2">
+            <span className="flex items-end gap-0.5" aria-hidden="true">
+              {[1, 2, 3, 4, 5].map((level) => (
+                <span
+                  key={level}
+                  className={cn(
+                    'w-1.5 rounded-sm',
+                    bars >= level ? 'bg-success' : 'bg-border-strong',
+                  )}
+                  style={{ height: `${level * 4 + 4}px` }}
+                />
+              ))}
+            </span>
+            <span className="text-sm font-medium text-fg-muted capitalize">
               {modemSignal ? modemSignal.quality : 'unknown'}
               {modemSignal && modemSignal.quality !== 'unknown' ? ` (${modemSignal.signal})` : ''}
             </span>
-          </div>
-        </div>
+          </span>
+        </StatCard>
 
-        {/* Total Sent */}
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <div className="text-sm font-medium text-gray-500 dark:text-[#93a1a1]">Total Sent</div>
-          <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">
-            {totalSent}
-          </div>
-        </div>
+        <StatCard label="Total Sent" icon={<OutboxIcon className="h-5 w-5" />} tone="primary">
+          {totalSent.toLocaleString()}
+        </StatCard>
 
-        {/* Total Received */}
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <div className="text-sm font-medium text-gray-500 dark:text-[#93a1a1]">
-            Total Received
-          </div>
-          <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">
-            {totalReceived}
-          </div>
-        </div>
+        <StatCard label="Total Received" icon={<InboxIcon className="h-5 w-5" />} tone="primary">
+          {totalReceived.toLocaleString()}
+        </StatCard>
       </div>
 
-      {/* Pending Messages Banner */}
       {pendingCount > 0 && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-[#b58900] dark:bg-[#3b3200] dark:text-[#b58900]">
+        <Alert tone="warning">
           {pendingCount} message{pendingCount !== 1 ? 's' : ''} pending delivery.
-        </div>
+        </Alert>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Quick Send */}
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">Quick Send</h2>
-          {sendResult && (
-            <div
-              className={`mt-3 rounded-md p-3 text-sm ${
-                sendResult.type === 'success'
-                  ? 'bg-green-50 text-green-700 dark:bg-[#213a25] dark:text-[#859900]'
-                  : 'bg-red-50 text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]'
-              }`}
-            >
-              {sendResult.message}
-            </div>
-          )}
-          <form onSubmit={handleQuickSend} className="mt-4 space-y-3">
-            <div>
-              <label
-                htmlFor="quickTo"
-                className="block text-sm font-medium text-gray-700 dark:text-[#93a1a1]"
+        <Card className="self-start">
+          <CardHeader title="Quick Send" />
+          <CardBody>
+            <form onSubmit={handleQuickSend} className="space-y-4">
+              {sendResult && (
+                <Alert tone={sendResult.type === 'success' ? 'success' : 'danger'}>
+                  {sendResult.message}
+                </Alert>
+              )}
+              <Field label="Phone Number" htmlFor="quickTo">
+                <Input
+                  id="quickTo"
+                  type="tel"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  required
+                  placeholder="+1234567890"
+                />
+              </Field>
+              <Field label="Message" htmlFor="quickBody">
+                <Textarea
+                  id="quickBody"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  required
+                  rows={3}
+                  placeholder="Type your message..."
+                />
+              </Field>
+              <Button
+                type="submit"
+                loading={sending}
+                icon={<SendIcon className="h-4 w-4" />}
+                className="w-full"
               >
-                Phone Number
-              </label>
-              <input
-                id="quickTo"
-                type="tel"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                required
-                placeholder="+1234567890"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="quickBody"
-                className="block text-sm font-medium text-gray-700 dark:text-[#93a1a1]"
-              >
-                Message
-              </label>
-              <textarea
-                id="quickBody"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                required
-                rows={3}
-                placeholder="Type your message..."
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={sending}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-[#268bd2] dark:text-[#fdf6e3] dark:hover:bg-[#2aa5f5] dark:focus:ring-[#268bd2] dark:focus:ring-offset-[#073642]"
-            >
-              {sending ? 'Sending...' : 'Send SMS'}
-            </button>
-          </form>
-        </div>
+                {sending ? 'Sending...' : 'Send SMS'}
+              </Button>
+            </form>
+          </CardBody>
+        </Card>
 
         {/* Recent Messages */}
-        <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75] lg:col-span-2">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">
-            Recent Messages
-          </h2>
+        <Card className="lg:col-span-2">
+          <CardHeader title="Recent Messages" />
           {recentMessages.length === 0 ? (
-            <p className="mt-4 text-sm text-gray-500 dark:text-[#93a1a1]">No messages yet.</p>
+            <EmptyState icon={<MessageIcon className="h-6 w-6" />} title="No messages yet" />
           ) : (
-            <div className="mt-4 divide-y divide-gray-100 dark:divide-[#586e75]">
-              {recentMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className="flex cursor-pointer items-start justify-between rounded px-2 py-3 transition-colors -mx-2 hover:bg-gray-50 dark:hover:bg-[#0a4452]"
-                  onClick={() => navigate(`/messages/${msg.id}`)}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                          msg.direction === 'inbound'
-                            ? 'bg-blue-100 text-blue-700 dark:bg-[#1f3e52] dark:text-[#268bd2]'
-                            : 'bg-gray-100 text-gray-700 dark:bg-[#586e75] dark:text-[#eee8d5]'
-                        }`}
-                      >
-                        {msg.direction === 'inbound' ? 'IN' : 'OUT'}
-                      </span>
-                      <span
-                        className={`text-sm ${msg.direction === 'inbound' && msg.status === 'received' ? 'font-bold text-gray-900 dark:text-[#fdf6e3]' : 'font-medium text-gray-900 dark:text-[#eee8d5]'}`}
-                      >
-                        {msg.phone_number}
-                      </span>
-                      {msg.direction === 'inbound' && (
-                        <span
-                          className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
-                            msg.status === 'received'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-[#1f3e52] dark:text-[#268bd2]'
-                              : 'bg-gray-100 text-gray-600 dark:bg-[#586e75] dark:text-[#93a1a1]'
-                          }`}
-                        >
-                          {msg.status === 'received' ? 'Unread' : 'Read'}
-                        </span>
-                      )}
-                    </div>
-                    <p
-                      className={`mt-0.5 truncate text-sm ${msg.direction === 'inbound' && msg.status === 'received' ? 'font-semibold text-gray-900 dark:text-[#fdf6e3]' : 'text-gray-600 dark:text-[#93a1a1]'}`}
+            <ul className="divide-y divide-border">
+              {recentMessages.map((msg) => {
+                const unread = msg.direction === 'inbound' && msg.status === 'received';
+                return (
+                  <li key={msg.id}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/messages/${msg.id}`)}
+                      className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none sm:px-6"
                     >
-                      {msg.body}
-                    </p>
-                  </div>
-                  <span className="ml-4 shrink-0 text-xs text-gray-400 dark:text-[#93a1a1]">
-                    {formatRelativeTime(msg.created_at)}
-                  </span>
-                </div>
-              ))}
-            </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <DirectionBadge direction={msg.direction} />
+                          <span
+                            className={cn(
+                              'text-sm text-fg',
+                              unread ? 'font-semibold' : 'font-medium',
+                            )}
+                          >
+                            {msg.phone_number}
+                          </span>
+                          {msg.direction === 'inbound' && (
+                            <MessageStatusBadge status={msg.status} />
+                          )}
+                        </div>
+                        <p
+                          className={cn(
+                            'mt-1 truncate text-sm',
+                            unread ? 'font-medium text-fg' : 'text-fg-muted',
+                          )}
+                        >
+                          {msg.body}
+                        </p>
+                      </div>
+                      <span className="shrink-0 pt-0.5 text-xs text-fg-subtle">
+                        {formatRelativeTime(msg.created_at)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-        </div>
+        </Card>
       </div>
     </div>
+  );
+}
+
+const statTones = {
+  primary: 'bg-primary-soft text-primary-soft-fg',
+  success: 'bg-success-soft text-success-soft-fg',
+  danger: 'bg-danger-soft text-danger-soft-fg',
+} as const;
+
+function StatCard({
+  label,
+  icon,
+  tone,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  tone: keyof typeof statTones;
+  children: ReactNode;
+}) {
+  return (
+    <Card className="p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium tracking-wide text-fg-subtle uppercase sm:text-sm sm:normal-case sm:tracking-normal">
+          {label}
+        </p>
+        <span
+          className={cn(
+            'hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex',
+            statTones[tone],
+          )}
+        >
+          {icon}
+        </span>
+      </div>
+      <div className="mt-2 text-xl font-semibold text-fg sm:text-2xl">{children}</div>
+    </Card>
   );
 }

@@ -6,6 +6,25 @@ import { copyToClipboard } from '@/lib/clipboard';
 import Pagination from '@/components/Pagination';
 import WebhookDocs from '@/components/WebhookDocs';
 import { usePaginatedList } from '@/lib/usePaginatedList';
+import { cn } from '@/lib/cn';
+import { formatDate } from '@/lib/format';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  ConfirmInline,
+  DataTable,
+  EmptyState,
+  Field,
+  Input,
+  LoadingState,
+  PageHeader,
+  WebhookIcon,
+  type Column,
+} from '@/components/ui';
 
 type WebhookEvent = 'message.received' | 'message.sent' | 'message.failed';
 
@@ -40,16 +59,6 @@ const EVENT_OPTIONS: { value: WebhookEvent; label: string; description: string }
 
 const DEFAULT_EVENTS: WebhookEvent[] = ['message.received'];
 
-const inputClass =
-  'w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#eee8d5] dark:focus:border-[#268bd2] dark:focus:ring-[#268bd2]';
-const labelClass = 'mb-1 block text-sm font-medium text-gray-700 dark:text-[#93a1a1]';
-const linkButtonClass =
-  'text-xs text-blue-600 hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]';
-const secondaryButtonClass =
-  'rounded bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-[#586e75] dark:text-[#eee8d5] dark:hover:bg-[#657b83]';
-const dangerButtonClass =
-  'rounded bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-[#3b1f23] dark:text-[#dc322f] dark:hover:bg-[#4a262b]';
-
 /** Prefers the server's validation message over a generic fallback. */
 function errorMessage(err: unknown, fallback: string): string {
   if (isAxiosError(err) && typeof err.response?.data?.error === 'string') {
@@ -73,27 +82,15 @@ function maskSecret(secret: string) {
   return secret.slice(0, 4) + '********' + secret.slice(-4);
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 export default function Webhooks() {
   const { user } = useAuth();
 
   // Checked before mounting the manager so non-admins never hit the admin-only API.
   if (!user?.is_admin) {
     return (
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">Webhooks</h1>
-        <div className="mt-4 rounded-md bg-red-50 p-4 text-sm text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]">
-          You do not have permission to view this page. Admin access is required.
-        </div>
+      <div className="space-y-6">
+        <PageHeader title="Webhooks" />
+        <Alert>You do not have permission to view this page. Admin access is required.</Alert>
       </div>
     );
   }
@@ -236,303 +233,250 @@ function WebhookManager() {
     });
   };
 
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-[#fdf6e3]">Webhooks</h1>
-      <p className="mt-1 text-sm text-gray-600 dark:text-[#93a1a1]">
-        Get notified in real time when messages arrive or finish sending. Each delivery is a JSON
-        POST signed with the webhook&apos;s secret in the{' '}
-        <code className="font-mono text-xs">X-Webhook-Signature</code> header.{' '}
-        <a
-          href="#webhook-docs"
-          className="font-medium text-blue-600 hover:text-blue-800 dark:text-[#268bd2] dark:hover:text-[#2aa5f5]"
+  const columns: Column<Webhook>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      mobile: 'title',
+      className: 'font-medium whitespace-nowrap text-fg',
+      cell: (hook) => hook.name,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      mobile: 'title',
+      cell: (hook) =>
+        hook.is_active ? (
+          <Badge tone="success" dot>
+            Active
+          </Badge>
+        ) : (
+          <Badge dot>Paused</Badge>
+        ),
+    },
+    {
+      key: 'url',
+      header: 'Delivery URL',
+      mobile: 'body',
+      cell: (hook) => (
+        <span
+          className="block font-mono text-xs break-all text-fg-muted xl:max-w-[11rem] xl:truncate"
+          title={hook.url}
         >
-          See what your server receives
-        </a>
-      </p>
+          {hook.url}
+        </span>
+      ),
+    },
+    {
+      key: 'events',
+      header: 'Events',
+      cell: (hook) => (
+        <div className="flex flex-wrap gap-1">
+          {hook.events.map((event) => (
+            <Badge key={event} tone="primary" className="font-mono">
+              {event}
+            </Badge>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'secret',
+      header: 'Secret',
+      cell: (hook) => (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <code className="font-mono text-xs break-all text-fg-muted">
+            {revealed.has(hook.id) ? hook.secret : maskSecret(hook.secret)}
+          </code>
+          <span className="flex gap-3">
+            <Button variant="link" onClick={() => toggleReveal(hook.id)}>
+              {revealed.has(hook.id) ? 'Hide' : 'Show'}
+            </Button>
+            <Button variant="link" onClick={() => handleCopy(hook)}>
+              {copiedId === hook.id ? 'Copied!' : 'Copy'}
+            </Button>
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      className: 'text-fg-muted',
+      cell: (hook) => formatDate(hook.created_at),
+    },
+    {
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      mobile: 'footer',
+      cell: (hook) =>
+        deleteConfirmId === hook.id ? (
+          <ConfirmInline
+            prompt="Delete permanently?"
+            onConfirm={() => handleDelete(hook.id)}
+            onCancel={() => setDeleteConfirmId(null)}
+          />
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <Button variant="secondary" size="sm" onClick={() => startEdit(hook)}>
+              Edit
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => handleToggleActive(hook)}>
+              {hook.is_active ? 'Pause' : 'Resume'}
+            </Button>
+            <Button variant="danger-soft" size="sm" onClick={() => setDeleteConfirmId(hook.id)}>
+              Delete
+            </Button>
+          </div>
+        ),
+    },
+  ];
 
-      {error && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-[#3b1f23] dark:text-[#dc322f]">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mt-4 rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-[#213a25] dark:text-[#859900]">
-          {success}
-        </div>
-      )}
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Webhooks"
+        description={
+          <>
+            Get notified in real time when messages arrive or finish sending. Each delivery is a
+            JSON POST signed with the webhook&apos;s secret in the{' '}
+            <code className="font-mono text-xs">X-Webhook-Signature</code> header.{' '}
+            <a
+              href="#webhook-docs"
+              className="font-medium text-primary hover:text-primary-hover hover:underline"
+            >
+              See what your server receives
+            </a>
+          </>
+        }
+      />
+
+      {error && <Alert>{error}</Alert>}
+      {success && <Alert tone="success">{success}</Alert>}
 
       {/* Create / edit form */}
-      <div className="mt-6 rounded-lg bg-white p-4 shadow-md sm:p-6 dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
-        <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-[#eee8d5]">
-          {editing ? `Edit Webhook "${editing.name}"` : 'Create New Webhook'}
-        </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="webhookName" className={labelClass}>
-                Name
-              </label>
-              <input
-                id="webhookName"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                maxLength={100}
-                placeholder="e.g. Alerting bot"
-                className={inputClass}
-              />
+      <Card>
+        <CardHeader title={editing ? `Edit Webhook "${editing.name}"` : 'Create New Webhook'} />
+        <CardBody>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Name" htmlFor="webhookName">
+                <Input
+                  id="webhookName"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  maxLength={100}
+                  placeholder="e.g. Alerting bot"
+                />
+              </Field>
+              <Field label="Delivery URL" htmlFor="webhookUrl">
+                <Input
+                  id="webhookUrl"
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  required
+                  placeholder="https://example.com/sms-webhook"
+                />
+              </Field>
             </div>
-            <div>
-              <label htmlFor="webhookUrl" className={labelClass}>
-                Delivery URL
-              </label>
-              <input
-                id="webhookUrl"
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                required
-                placeholder="https://example.com/sms-webhook"
-                className={inputClass}
-              />
-            </div>
-          </div>
 
-          <div>
-            <label htmlFor="webhookSecret" className={labelClass}>
-              Signing Secret
-            </label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                id="webhookSecret"
-                type="text"
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                minLength={16}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={
-                  editing ? 'Leave blank to keep the current secret' : 'Leave blank to generate one'
-                }
-                className={`${inputClass} min-w-0 font-mono`}
-              />
-              <button
-                type="button"
-                onClick={() => setSecret(generateSecret())}
-                className="shrink-0 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-[#586e75] dark:bg-[#002b36] dark:text-[#93a1a1] dark:hover:bg-[#0a4452] dark:focus:ring-[#268bd2]"
-              >
-                Generate
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-[#93a1a1]">
-              At least 16 characters. Used as the HMAC-SHA256 key for every delivery.
-              {editing && ' Saving a new secret replaces the current one immediately.'}
-            </p>
-          </div>
-
-          <fieldset>
-            <legend className={labelClass}>Events</legend>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {EVENT_OPTIONS.map((option) => (
-                <label
-                  key={option.value}
-                  className="flex cursor-pointer items-start gap-2 rounded-md border border-gray-200 p-3 text-sm hover:bg-gray-50 dark:border-[#586e75] dark:hover:bg-[#0a4452]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={events.includes(option.value)}
-                    onChange={() => toggleEvent(option.value)}
-                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-medium text-gray-800 dark:text-[#eee8d5]">
-                      {option.label}
-                    </span>
-                    <code className="block font-mono text-xs text-gray-500 dark:text-[#93a1a1]">
-                      {option.value}
-                    </code>
-                    <span className="mt-1 block text-xs text-gray-500 dark:text-[#93a1a1]">
-                      {option.description}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            {events.length === 0 && (
-              <p className="mt-1 text-xs text-red-600 dark:text-[#dc322f]">
-                Select at least one event.
-              </p>
-            )}
-          </fieldset>
-
-          <div className="flex flex-wrap justify-end gap-2">
-            {editing && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-[#586e75] dark:text-[#eee8d5] dark:hover:bg-[#657b83]"
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              type="submit"
-              disabled={saving || events.length === 0}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-[#268bd2] dark:text-[#fdf6e3] dark:hover:bg-[#2aa5f5] dark:focus:ring-[#268bd2] dark:focus:ring-offset-[#073642]"
+            <Field
+              label="Signing Secret"
+              htmlFor="webhookSecret"
+              hint={
+                <>
+                  At least 16 characters. Used as the HMAC-SHA256 key for every delivery.
+                  {editing && ' Saving a new secret replaces the current one immediately.'}
+                </>
+              }
             >
-              {saving ? 'Saving...' : editing ? 'Save Changes' : 'Create Webhook'}
-            </button>
-          </div>
-        </form>
-      </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id="webhookSecret"
+                  type="text"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  minLength={16}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={
+                    editing
+                      ? 'Leave blank to keep the current secret'
+                      : 'Leave blank to generate one'
+                  }
+                  className="font-mono"
+                />
+                <Button variant="secondary" onClick={() => setSecret(generateSecret())}>
+                  Generate
+                </Button>
+              </div>
+            </Field>
+
+            <fieldset>
+              <legend className="mb-1.5 block text-sm font-medium text-fg">Events</legend>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {EVENT_OPTIONS.map((option) => {
+                  const checked = events.includes(option.value);
+                  return (
+                    <label
+                      key={option.value}
+                      className={cn(
+                        'flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-sm transition-colors',
+                        checked
+                          ? 'border-primary bg-primary-soft/40'
+                          : 'border-border hover:bg-surface-hover',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleEvent(option.value)}
+                        className="mt-0.5"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium text-fg">{option.label}</span>
+                        <code className="block font-mono text-xs text-fg-subtle">
+                          {option.value}
+                        </code>
+                        <span className="mt-1 block text-xs text-fg-muted">
+                          {option.description}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {events.length === 0 && (
+                <p className="mt-1.5 text-xs text-danger">Select at least one event.</p>
+              )}
+            </fieldset>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              {editing && (
+                <Button variant="secondary" onClick={resetForm}>
+                  Cancel
+                </Button>
+              )}
+              <Button type="submit" disabled={events.length === 0} loading={saving}>
+                {saving ? 'Saving...' : editing ? 'Save Changes' : 'Create Webhook'}
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
 
       {/* Webhooks table */}
-      <div className="mt-6 overflow-hidden rounded-lg bg-white shadow-md dark:bg-[#073642] dark:ring-1 dark:ring-[#586e75]">
+      <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-500 dark:text-[#93a1a1]">
-            Loading webhooks...
-          </div>
+          <LoadingState label="Loading webhooks..." />
         ) : webhooks.length === 0 ? (
-          <div className="p-6 text-center text-sm text-gray-500 dark:text-[#93a1a1]">
-            No webhooks yet.
-          </div>
+          <EmptyState icon={<WebhookIcon className="h-6 w-6" />} title="No webhooks yet." />
         ) : (
-          <div className={refreshing ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[56rem] text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50 dark:border-[#586e75] dark:bg-[#002b36]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                      Delivery URL
-                    </th>
-                    <th className="px-4 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                      Events
-                    </th>
-                    <th className="px-4 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                      Signing Secret
-                    </th>
-                    <th className="px-4 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                      Created
-                    </th>
-                    <th className="px-4 py-3 font-medium text-gray-600 dark:text-[#93a1a1]">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-[#586e75]">
-                  {webhooks.map((hook) => (
-                    <tr
-                      key={hook.id}
-                      className="align-top hover:bg-gray-50 dark:hover:bg-[#0a4452]"
-                    >
-                      <td className="px-4 py-4 font-medium text-gray-900 dark:text-[#eee8d5]">
-                        {hook.name}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span
-                          className="block max-w-[16rem] truncate font-mono text-xs text-gray-600 dark:text-[#93a1a1]"
-                          title={hook.url}
-                        >
-                          {hook.url}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-1">
-                          {hook.events.map((event) => (
-                            <span
-                              key={event}
-                              className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 font-mono text-xs text-blue-700 dark:bg-[#002b36] dark:text-[#268bd2]"
-                            >
-                              {event}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <code className="font-mono text-xs text-gray-600 dark:text-[#93a1a1]">
-                            {revealed.has(hook.id) ? hook.secret : maskSecret(hook.secret)}
-                          </code>
-                          <button onClick={() => toggleReveal(hook.id)} className={linkButtonClass}>
-                            {revealed.has(hook.id) ? 'Hide' : 'Show'}
-                          </button>
-                          <button onClick={() => handleCopy(hook)} className={linkButtonClass}>
-                            {copiedId === hook.id ? 'Copied!' : 'Copy'}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        {hook.is_active ? (
-                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-[#213a25] dark:text-[#859900]">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-[#002b36] dark:text-[#93a1a1]">
-                            Paused
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-gray-600 dark:text-[#93a1a1]">
-                        {formatDate(hook.created_at)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {deleteConfirmId === hook.id ? (
-                            <>
-                              <span className="text-xs text-gray-600 dark:text-[#93a1a1]">
-                                Delete permanently?
-                              </span>
-                              <button
-                                onClick={() => handleDelete(hook.id)}
-                                className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700"
-                              >
-                                Yes
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirmId(null)}
-                                className={secondaryButtonClass}
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => startEdit(hook)}
-                                className={secondaryButtonClass}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleToggleActive(hook)}
-                                className={secondaryButtonClass}
-                              >
-                                {hook.is_active ? 'Pause' : 'Resume'}
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirmId(hook.id)}
-                                className={dangerButtonClass}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
+          <>
+            <DataTable rows={webhooks} columns={columns} busy={refreshing} breakpoint="xl" />
             <Pagination
               page={page}
               pageSize={pageSize}
@@ -543,9 +487,9 @@ function WebhookManager() {
               onPageChange={setPage}
               onPageSizeChange={setPageSize}
             />
-          </div>
+          </>
         )}
-      </div>
+      </Card>
 
       <WebhookDocs id="webhook-docs" />
     </div>
