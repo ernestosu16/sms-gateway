@@ -6,6 +6,8 @@
 
 A self-hosted SMS gateway that provides a WebUI and REST API for sending and receiving SMS messages via a USB GSM modem. Built with Go and React, packaged as a single binary.
 
+> **Fork notice:** this repository is a modified version of [mattboston/sms-gateway](https://github.com/mattboston/sms-gateway), created by Matt Shields. Credit for the original project goes to its author. This fork adds the changes listed in [Changes in this fork](#changes-in-this-fork) and is distributed under the same [GPL-3.0 license](LICENSE). See [Credits and license](#credits-and-license).
+
 ![Conversations view](docs/images/screenshots/en/chats.png)
 
 ## Contents
@@ -23,7 +25,7 @@ A self-hosted SMS gateway that provides a WebUI and REST API for sending and rec
 - [API](#api)
 - [Webhooks](#webhooks)
 - [Development](#development)
-- [License](#license)
+- [Credits and license](#credits-and-license)
 
 ## Why SMS Gateway?
 
@@ -111,17 +113,17 @@ To run SMS Gateway, you need a USB GSM modem and an active SIM card with SMS cap
 
 ### USB GSM Modem
 
-We use and recommend the [SIM7600G-H 4G LTE USB Dongle](https://www.amazon.com/dp/B0BHQFTFPH?tag=mattboston-20). It supports global 4G LTE bands, works out of the box on Linux (including Raspberry Pi), and exposes a standard serial interface for AT commands. For detailed documentation, pinout diagrams, and troubleshooting, see the [Waveshare SIM7600G-H wiki](https://www.waveshare.com/wiki/SIM7600G-H_4G_DONGLE).
+The original author uses and recommends the [SIM7600G-H 4G LTE USB Dongle](https://www.amazon.com/dp/B0BHQFTFPH?tag=mattboston-20). It supports global 4G LTE bands, works out of the box on Linux (including Raspberry Pi), and exposes a standard serial interface for AT commands. For detailed documentation, pinout diagrams, and troubleshooting, see the [Waveshare SIM7600G-H wiki](https://www.waveshare.com/wiki/SIM7600G-H_4G_DONGLE).
 
 ![SIM7600G-H 4G Dongle](docs/images/sim7600g-h-4g-dongle-1.jpg)
 
 ### SIM Card
 
-Any SIM card with an active SMS plan will work. We use [Tello](https://tello.com/account/register?_referral=P30KX3Z2), which offers affordable pay-as-you-go plans on the T-Mobile network. I think I'm paying $8/month for unlimited SMS.
+Any SIM card with an active SMS plan will work. The original author uses [Tello](https://tello.com/account/register?_referral=P30KX3Z2), which offers affordable pay-as-you-go plans on the T-Mobile network, for about $8/month with unlimited SMS.
 
-> **Note:** The links above are referral links. Using them helps support the development of this project and is greatly appreciated!
+> **Note:** The links above are the original author's referral links and are kept unchanged. Using them supports the development of the original project.
 >
-> If you'd like to support the project further, check out my [Amazon Wish List](https://www.amazon.com/hz/wishlist/ls/T3L6QCKZJ4Q4?ref_=wl_share).
+> To support the original project further, see the author's [Amazon Wish List](https://www.amazon.com/hz/wishlist/ls/T3L6QCKZJ4Q4?ref_=wl_share).
 
 ## Screenshots
 
@@ -193,6 +195,8 @@ Language (Auto, English, Spanish) and theme (Light, Dark, System).
 
 - A USB GSM modem (e.g., Huawei E220, SIM800)
 - Go 1.25+ and Node.js 22+ (for building from source)
+
+> **Releases come from the original project.** The install script, the GitHub Releases link and the `ghcr.io/mattboston/sms-gateway` image below download builds published by [mattboston/sms-gateway](https://github.com/mattboston/sms-gateway). They do not include changes from this fork that have not been merged upstream; to run this fork, build it [from source](#from-source) or build the Docker image locally (`docker build -t sms-gateway:local .`).
 
 ### Automated Install
 
@@ -632,6 +636,28 @@ openclaw/             # OpenClaw skill and scripts
 docs/images/          # README images and screenshots
 ```
 
-## License
+## Credits and license
 
-GPL-3.0. See [`LICENSE`](LICENSE).
+SMS Gateway was created by **Matt Shields** ([@mattboston](https://github.com/mattboston)). The original project lives at [https://github.com/mattboston/sms-gateway](https://github.com/mattboston/sms-gateway).
+
+This repository is a fork maintained by **Ernesto Suarez Ramirez** ([@ernestosu16](https://github.com/ernestosu16)). It is licensed, like the original, under the **GNU General Public License v3.0**; the full text is in [`LICENSE`](LICENSE). In short:
+
+- The original copyright and license notices are kept, and the original author's commits remain in the git history.
+- The modifications made in this fork are also released under GPL-3.0; they are listed below and in the git history with their dates and authors.
+- Anyone who distributes this software, modified or not, must do so under GPL-3.0, keep these notices and make the corresponding source code available.
+- The software is provided without any warranty, as stated in sections 15 and 16 of the license.
+
+This summary is for orientation only and does not replace the license text.
+
+### Changes in this fork
+
+Modified by Ernesto Suarez Ramirez starting 2026-10-02:
+
+- Signed webhooks for received, sent and failed messages.
+- Security hardening: random admin password with forced change, required strong JWT secret, hashed API keys, token revocation, AT command injection and sender spoofing protection, security headers, login throttling.
+- Configurable HTTP host binding and SQLite concurrency fixes.
+- Long SMS sent as concatenated parts in PDU mode.
+- Responsive Web UI redesign, dark theme, confirmation dialogs and a collapsible, resizable sidebar.
+- Chat-style Messages view, contacts, international phone input and E.164 validation.
+- Validated AT console with command reference, and deletion of non-admin users.
+- English and Spanish translations, Preferences panel, and this bilingual README with new screenshots.

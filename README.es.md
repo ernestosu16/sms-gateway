@@ -10,6 +10,8 @@ Una pasarela de SMS autoalojada que ofrece una interfaz web y una API REST para 
 
 > Este documento es la traducción al español de [README.md](README.md). Si hay alguna diferencia, la versión en inglés es la de referencia.
 
+> **Aviso de fork:** este repositorio es una versión modificada de [mattboston/sms-gateway](https://github.com/mattboston/sms-gateway), creado por Matt Shields. El mérito del proyecto original es de su autor. Este fork añade los cambios descritos en [Cambios de este fork](#cambios-de-este-fork) y se distribuye bajo la misma [licencia GPL-3.0](LICENSE). Consulta [Créditos y licencia](#créditos-y-licencia).
+
 ## Contenido
 
 - [¿Por qué SMS Gateway?](#por-qué-sms-gateway)
@@ -25,7 +27,7 @@ Una pasarela de SMS autoalojada que ofrece una interfaz web y una API REST para 
 - [API](#api)
 - [Webhooks](#webhooks)
 - [Desarrollo](#desarrollo)
-- [Licencia](#licencia)
+- [Créditos y licencia](#créditos-y-licencia)
 
 ## ¿Por qué SMS Gateway?
 
@@ -116,17 +118,17 @@ Para usar SMS Gateway necesitas un módem GSM USB y una SIM activa con SMS.
 
 ### Módem GSM USB
 
-Usamos y recomendamos el [módem USB SIM7600G-H 4G LTE](https://www.amazon.com/dp/B0BHQFTFPH?tag=mattboston-20). Soporta bandas 4G LTE globales, funciona directamente en Linux (incluida la Raspberry Pi) y expone una interfaz serie estándar para comandos AT. Para documentación detallada, diagramas de pines y resolución de problemas, consulta la [wiki de Waveshare del SIM7600G-H](https://www.waveshare.com/wiki/SIM7600G-H_4G_DONGLE).
+El autor original usa y recomienda el [módem USB SIM7600G-H 4G LTE](https://www.amazon.com/dp/B0BHQFTFPH?tag=mattboston-20). Soporta bandas 4G LTE globales, funciona directamente en Linux (incluida la Raspberry Pi) y expone una interfaz serie estándar para comandos AT. Para documentación detallada, diagramas de pines y resolución de problemas, consulta la [wiki de Waveshare del SIM7600G-H](https://www.waveshare.com/wiki/SIM7600G-H_4G_DONGLE).
 
 ![Módem SIM7600G-H 4G](docs/images/sim7600g-h-4g-dongle-1.jpg)
 
 ### Tarjeta SIM
 
-Sirve cualquier SIM con un plan de SMS activo. Nosotros usamos [Tello](https://tello.com/account/register?_referral=P30KX3Z2), que ofrece planes de prepago económicos sobre la red de T-Mobile (unos 8 USD/mes con SMS ilimitados).
+Sirve cualquier SIM con un plan de SMS activo. El autor original usa [Tello](https://tello.com/account/register?_referral=P30KX3Z2), que ofrece planes de prepago económicos sobre la red de T-Mobile (unos 8 USD/mes con SMS ilimitados).
 
-> **Nota:** los enlaces anteriores son enlaces de referido. Usarlos ayuda a financiar el desarrollo del proyecto y se agradece mucho.
+> **Nota:** los enlaces anteriores son enlaces de referido del autor original y se mantienen sin cambios. Usarlos ayuda a financiar el desarrollo del proyecto original.
 >
-> Si quieres apoyar aún más el proyecto, echa un vistazo a la [lista de deseos de Amazon](https://www.amazon.com/hz/wishlist/ls/T3L6QCKZJ4Q4?ref_=wl_share).
+> Si quieres apoyar aún más el proyecto original, echa un vistazo a la [lista de deseos de Amazon del autor](https://www.amazon.com/hz/wishlist/ls/T3L6QCKZJ4Q4?ref_=wl_share).
 
 ## Capturas de pantalla
 
@@ -198,6 +200,8 @@ Idioma (Auto, inglés, español) y tema (Claro, Oscuro, Sistema).
 
 - Un módem GSM USB (por ejemplo, Huawei E220, SIM800)
 - Go 1.25+ y Node.js 22+ (para compilar desde el código fuente)
+
+> **Las versiones publicadas vienen del proyecto original.** El script de instalación, el enlace a GitHub Releases y la imagen `ghcr.io/mattboston/sms-gateway` descargan compilaciones publicadas por [mattboston/sms-gateway](https://github.com/mattboston/sms-gateway). No incluyen los cambios de este fork que no se hayan integrado en el original; para usar este fork, compílalo [desde el código fuente](#desde-el-código-fuente) o construye la imagen Docker localmente (`docker build -t sms-gateway:local .`).
 
 ### Instalación automática
 
@@ -642,6 +646,28 @@ openclaw/             # Skill y scripts de OpenClaw
 docs/images/          # Imágenes y capturas del README
 ```
 
-## Licencia
+## Créditos y licencia
 
-GPL-3.0. Consulta [`LICENSE`](LICENSE).
+SMS Gateway fue creado por **Matt Shields** ([@mattboston](https://github.com/mattboston)). El proyecto original está en [https://github.com/mattboston/sms-gateway](https://github.com/mattboston/sms-gateway).
+
+Este repositorio es un fork mantenido por **Ernesto Suarez Ramirez** ([@ernestosu16](https://github.com/ernestosu16)). Igual que el original, se distribuye bajo la **GNU General Public License v3.0**; el texto completo (en inglés, que es la versión legalmente válida) está en [`LICENSE`](LICENSE). En resumen:
+
+- Se conservan los avisos de copyright y de licencia originales, y los commits del autor original siguen en el historial de git.
+- Las modificaciones de este fork también se publican bajo GPL-3.0; se listan a continuación y en el historial de git con sus fechas y autores.
+- Quien distribuya este software, modificado o no, debe hacerlo bajo GPL-3.0, mantener estos avisos y poner a disposición el código fuente correspondiente.
+- El software se ofrece sin ninguna garantía, según las secciones 15 y 16 de la licencia.
+
+Este resumen es orientativo y no sustituye al texto de la licencia.
+
+### Cambios de este fork
+
+Modificado por Ernesto Suarez Ramirez desde el 2026-10-02:
+
+- Webhooks firmados para mensajes recibidos, enviados y fallidos.
+- Refuerzo de seguridad: contraseña de administrador aleatoria con cambio obligatorio, secreto JWT robusto obligatorio, claves API guardadas con hash, revocación de tokens, protección contra inyección de comandos AT y suplantación del remitente, cabeceras de seguridad y límite de intentos de inicio de sesión.
+- Dirección de escucha HTTP configurable y correcciones de concurrencia en SQLite.
+- SMS largos enviados como partes concatenadas en modo PDU.
+- Rediseño adaptable de la interfaz, tema oscuro, diálogos de confirmación y barra lateral plegable y redimensionable.
+- Vista de Mensajes tipo chat, contactos, campo de teléfono internacional y validación E.164.
+- Consola AT validada con referencia de comandos, y eliminación de usuarios no administradores.
+- Traducciones al inglés y al español, panel de Preferencias y este README bilingüe con capturas nuevas.
