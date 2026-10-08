@@ -7,5 +7,6 @@ export { DataTable, type Column } from './DataTable';
 export { Field, Input, Select, Textarea } from './Field';
 export { PageHeader } from './PageHeader';
 export { ResizeHandle } from './ResizeHandle';
+export { SegmentedControl, type SegmentedOption } from './SegmentedControl';
 export { EmptyState, LoadingState, Spinner } from './States';
 export * from './icons';

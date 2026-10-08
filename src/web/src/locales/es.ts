@@ -37,6 +37,8 @@ const es: Record<MessageKey, string> = {
   'language.auto': 'Auto',
   'language.autoTitle': 'Idioma del navegador',
   'theme.label': 'Modo de tema',
+  'preferences.title': 'Preferencias',
+  'preferences.theme': 'Tema',
   'theme.light': 'Claro',
   'theme.dark': 'Oscuro',
   'theme.system': 'Sistema',

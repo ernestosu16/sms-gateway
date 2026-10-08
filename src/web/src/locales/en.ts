@@ -38,6 +38,8 @@ const en = {
   'language.auto': 'Auto',
   'language.autoTitle': 'Browser language',
   'theme.label': 'Theme mode',
+  'preferences.title': 'Preferences',
+  'preferences.theme': 'Theme',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
   'theme.system': 'System',

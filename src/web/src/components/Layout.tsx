@@ -7,8 +7,7 @@ import { formatNumber } from '@/lib/format';
 import type { MessageKey } from '@/locales/en';
 import { useMessageStats } from '@/lib/messageActivity';
 import { useResizablePanel } from '@/lib/useResizablePanel';
-import LanguageControl from '@/components/LanguageControl';
-import ThemeModeControl from '@/components/ThemeModeControl';
+import PreferencesMenu from '@/components/PreferencesMenu';
 import {
   ContactIcon,
   DashboardIcon,
@@ -229,26 +228,15 @@ export default function Layout() {
           ))}
         </nav>
 
+        {/* relative: the preferences panel opens against this footer. */}
         <div
           className={cn(
-            'shrink-0 space-y-3 border-t border-sidebar-border p-4',
-            rail && 'lg:flex lg:flex-col lg:items-center lg:px-2',
+            'relative flex shrink-0 items-center gap-2 border-t border-sidebar-border p-4',
+            rail && 'lg:flex-col lg:gap-2 lg:px-2',
           )}
         >
-          <LanguageControl
-            className={cn(
-              'flex w-full border-sidebar-border bg-sidebar-active/40',
-              rail && 'lg:w-auto lg:flex-col',
-            )}
-          />
-          <ThemeModeControl
-            className={cn(
-              'flex w-full border-sidebar-border bg-sidebar-active/40',
-              rail && 'lg:w-auto lg:flex-col',
-            )}
-          />
           {user && (
-            <div className={cn('flex items-center gap-3', rail && 'lg:flex-col lg:gap-2')}>
+            <>
               <span
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-active text-sm font-semibold text-sidebar-active-fg uppercase"
                 title={rail ? user.username : undefined}
@@ -259,20 +247,31 @@ export default function Layout() {
                 <p className="truncate text-sm font-medium text-sidebar-active-fg">
                   {user.username}
                 </p>
-                <p className="text-xs opacity-70">
+                <p className="truncate text-xs opacity-70">
                   {user.is_admin ? t('common.administrator') : t('common.user')}
                 </p>
               </div>
-              <button
-                onClick={handleLogout}
-                className="rounded-md p-2 hover:bg-sidebar-active hover:text-sidebar-active-fg"
-                aria-label={t('nav.logout')}
-                title={t('nav.logout')}
-              >
-                <LogoutIcon className="h-[18px] w-[18px]" />
-              </button>
-            </div>
+            </>
           )}
+          <div className={cn('flex shrink-0 items-center', rail && 'lg:flex-col lg:gap-1')}>
+            <PreferencesMenu
+              className="rounded-md p-1.5 hover:bg-sidebar-active hover:text-sidebar-active-fg aria-expanded:bg-sidebar-active aria-expanded:text-sidebar-active-fg"
+              panelClassName={cn(
+                // A fixed width keeps the options readable even when the
+                // sidebar is dragged to its narrowest; it may overlap the page.
+                'bottom-full left-3 mb-2 w-64 max-w-[calc(100vw-1.5rem)]',
+                rail && 'lg:bottom-3 lg:left-full lg:mb-0 lg:ml-2',
+              )}
+            />
+            <button
+              onClick={handleLogout}
+              className="rounded-md p-1.5 hover:bg-sidebar-active hover:text-sidebar-active-fg"
+              aria-label={t('nav.logout')}
+              title={t('nav.logout')}
+            >
+              <LogoutIcon className="h-[18px] w-[18px]" />
+            </button>
+          </div>
         </div>
 
         {/* Drag to resize, past the minimum to collapse, double-click to reset. */}
