@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,31 +13,21 @@ import (
 	"testing"
 	"time"
 
-	smsgateway "github.com/mattboston/sms-gateway"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
 	"github.com/mattboston/sms-gateway/internal/webhook"
 	"github.com/mattboston/sms-gateway/internal/webhook/webhooktest"
-	_ "modernc.org/sqlite"
 )
 
-// newSMSTestHandler returns an SMSHandler backed by an in-memory database built
-// from the real migrations, plus the repository so tests can seed messages.
+// newSMSTestHandler returns an SMSHandler backed by a database built from the
+// real migrations, plus the repository so tests can seed messages. Sends
+// dispatch webhooks on other goroutines, so the database must be a file that
+// every pooled connection sees, not :memory:.
 func newSMSTestHandler(t *testing.T) (*SMSHandler, *database.Repository) {
 	t.Helper()
 
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("opening test db: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-
-	if err := database.RunMigrations(db, "sqlite", smsgateway.MigrationsFS); err != nil {
-		t.Fatalf("running migrations: %v", err)
-	}
-
-	repo := database.NewRepository(db)
+	repo := webhooktest.NewRepository(t)
 	return NewSMSHandler(repo, modem.NewMockModem(), webhook.NewDispatcher(context.Background(), repo)), repo
 }
 
