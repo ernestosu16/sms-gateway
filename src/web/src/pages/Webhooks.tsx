@@ -15,7 +15,6 @@ import {
   Card,
   CardBody,
   CardHeader,
-  ConfirmInline,
   DataTable,
   EmptyState,
   Field,
@@ -23,6 +22,7 @@ import {
   LoadingState,
   PageHeader,
   WebhookIcon,
+  useConfirm,
   type Column,
 } from '@/components/ui';
 
@@ -123,7 +123,7 @@ function WebhookManager() {
 
   const [actionError, setActionError] = useState('');
   const [success, setSuccess] = useState('');
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -198,14 +198,19 @@ function WebhookManager() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (hook: Webhook) => {
+    const confirmed = await confirm({
+      title: `Delete "${hook.name}"?`,
+      description: 'Deliveries to this URL stop immediately. This cannot be undone.',
+      confirmLabel: 'Delete',
+    });
+    if (!confirmed) return;
     setActionError('');
     setSuccess('');
     try {
-      await api.delete(`/webhooks/${id}`);
-      setDeleteConfirmId(null);
-      if (editing?.id === id) resetForm();
-      removeItems(new Set([id]));
+      await api.delete(`/webhooks/${hook.id}`);
+      if (editing?.id === hook.id) resetForm();
+      removeItems(new Set([hook.id]));
     } catch (err) {
       setActionError(errorMessage(err, 'Failed to delete webhook.'));
     }
@@ -309,26 +314,19 @@ function WebhookManager() {
       key: 'actions',
       header: <span className="sr-only">Actions</span>,
       mobile: 'footer',
-      cell: (hook) =>
-        deleteConfirmId === hook.id ? (
-          <ConfirmInline
-            prompt="Delete permanently?"
-            onConfirm={() => handleDelete(hook.id)}
-            onCancel={() => setDeleteConfirmId(null)}
-          />
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <Button variant="secondary" size="sm" onClick={() => startEdit(hook)}>
-              Edit
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleToggleActive(hook)}>
-              {hook.is_active ? 'Pause' : 'Resume'}
-            </Button>
-            <Button variant="danger-soft" size="sm" onClick={() => setDeleteConfirmId(hook.id)}>
-              Delete
-            </Button>
-          </div>
-        ),
+      cell: (hook) => (
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <Button variant="secondary" size="sm" onClick={() => startEdit(hook)}>
+            Edit
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => handleToggleActive(hook)}>
+            {hook.is_active ? 'Pause' : 'Resume'}
+          </Button>
+          <Button variant="danger-soft" size="sm" onClick={() => handleDelete(hook)}>
+            Delete
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -492,6 +490,8 @@ function WebhookManager() {
       </Card>
 
       <WebhookDocs id="webhook-docs" />
+
+      {dialog}
     </div>
   );
 }

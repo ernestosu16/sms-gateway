@@ -12,7 +12,6 @@ import {
   CardBody,
   CardHeader,
   CheckIcon,
-  ConfirmInline,
   CopyIcon,
   DataTable,
   EmptyState,
@@ -22,6 +21,7 @@ import {
   LoadingState,
   PageHeader,
   PlusIcon,
+  useConfirm,
   type Column,
 } from '@/components/ui';
 
@@ -53,8 +53,7 @@ export default function APIKeys() {
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   const error = actionError || loadError;
 
@@ -75,21 +74,31 @@ export default function APIKeys() {
     }
   };
 
-  const handleDeactivate = async (id: string) => {
+  const handleDeactivate = async (key: APIKey) => {
+    const confirmed = await confirm({
+      title: `Deactivate "${key.label}"?`,
+      description: 'Requests using this key will be rejected. The key stays listed as inactive.',
+      confirmLabel: 'Deactivate',
+    });
+    if (!confirmed) return;
     try {
-      await api.delete(`/apikeys/${id}`);
-      setConfirmId(null);
+      await api.delete(`/apikeys/${key.id}`);
       refresh();
     } catch {
       setActionError('Failed to deactivate API key.');
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (key: APIKey) => {
+    const confirmed = await confirm({
+      title: `Delete "${key.label}"?`,
+      description: 'This permanently removes the key and cannot be undone.',
+      confirmLabel: 'Delete',
+    });
+    if (!confirmed) return;
     try {
-      await api.delete(`/apikeys/${id}/delete`);
-      setDeleteConfirmId(null);
-      removeItems(new Set([id]));
+      await api.delete(`/apikeys/${key.id}/delete`);
+      removeItems(new Set([key.id]));
     } catch {
       setActionError('Failed to delete API key.');
     }
@@ -137,45 +146,18 @@ export default function APIKeys() {
       header: <span className="sr-only">Actions</span>,
       mobile: 'footer',
       className: 'text-right',
-      cell: (k) =>
-        confirmId === k.id ? (
-          <ConfirmInline
-            prompt="Deactivate?"
-            onConfirm={() => handleDeactivate(k.id)}
-            onCancel={() => setConfirmId(null)}
-          />
-        ) : deleteConfirmId === k.id ? (
-          <ConfirmInline
-            prompt="Delete permanently?"
-            onConfirm={() => handleDelete(k.id)}
-            onCancel={() => setDeleteConfirmId(null)}
-          />
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            {k.is_active && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setConfirmId(k.id);
-                  setDeleteConfirmId(null);
-                }}
-              >
-                Deactivate
-              </Button>
-            )}
-            <Button
-              variant="danger-soft"
-              size="sm"
-              onClick={() => {
-                setDeleteConfirmId(k.id);
-                setConfirmId(null);
-              }}
-            >
-              Delete
+      cell: (k) => (
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
+          {k.is_active && (
+            <Button variant="secondary" size="sm" onClick={() => handleDeactivate(k)}>
+              Deactivate
             </Button>
-          </div>
-        ),
+          )}
+          <Button variant="danger-soft" size="sm" onClick={() => handleDelete(k)}>
+            Delete
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -256,6 +238,8 @@ export default function APIKeys() {
           </>
         )}
       </Card>
+
+      {dialog}
     </div>
   );
 }
