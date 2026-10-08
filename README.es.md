@@ -2,6 +2,9 @@
 
 # SMS Gateway
 
+[![CI](https://github.com/ernestosu16/sms-gateway/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ernestosu16/sms-gateway/actions/workflows/ci.yml?query=branch%3Amain)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+
 [English](README.md) | **Español**
 
 Una pasarela de SMS autoalojada que ofrece una interfaz web y una API REST para enviar y recibir SMS a través de un módem GSM USB. Está hecha con Go y React y se distribuye como un único binario.

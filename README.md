@@ -2,6 +2,9 @@
 
 # SMS Gateway
 
+[![CI](https://github.com/ernestosu16/sms-gateway/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ernestosu16/sms-gateway/actions/workflows/ci.yml?query=branch%3Amain)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+
 **English** | [Español](README.es.md)
 
 A self-hosted SMS gateway that provides a WebUI and REST API for sending and receiving SMS messages via a USB GSM modem. Built with Go and React, packaged as a single binary.
