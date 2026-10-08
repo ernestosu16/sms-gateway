@@ -79,54 +79,161 @@ prompt() {
   printf -v "$var" '%s' "${input:-$default}"
 }
 
-# --- Detect architecture ---
+# --- Detect platform ---
 
+# Print the operating system name from /etc/os-release, for diagnostics.
+detect_os() {
+  local name=""
+  if [ -r /etc/os-release ]; then
+    name="$(. /etc/os-release && printf '%s' "${PRETTY_NAME:-${NAME:-}}")"
+  fi
+  printf '%s (kernel %s)' "${name:-unknown Linux}" "$(uname -r)"
+}
+
+# Print 32 or 64: the word size of the userland, which can differ from the
+# kernel. Raspberry Pi OS 32-bit boots a 64-bit kernel on a Pi 3 or newer, so
+# uname -m says aarch64 while every program on the system is 32-bit.
+userland_bits() {
+  local bits=""
+  bits="$(getconf LONG_BIT 2>/dev/null || true)"
+  if [ "$bits" != "32" ] && [ "$bits" != "64" ]; then
+    # EI_CLASS, the fifth byte of an ELF header: 1 = 32-bit, 2 = 64-bit.
+    case "$(od -An -tu1 -j4 -N1 /bin/sh 2>/dev/null | tr -d ' ')" in
+      1) bits=32 ;;
+      2) bits=64 ;;
+    esac
+  fi
+  printf '%s' "$bits"
+}
+
+# Print the release asset suffix that runs on this machine.
 detect_arch() {
-  local arch
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64|amd64)    echo "linux-amd64" ;;
-    armv7*|armhf)    echo "linux-arm7" ;;
-    aarch64|arm64)   echo "linux-arm64" ;;
-    *)               fatal "Unsupported architecture: $arch" ;;
+  local machine bits
+  machine="$(uname -m)"
+  bits="$(userland_bits)"
+
+  [ "$(uname -s)" = "Linux" ] || fatal "Unsupported operating system: $(uname -s) (only Linux is supported)"
+
+  case "$machine" in
+    x86_64|amd64)
+      [ "$bits" = "32" ] && fatal "Unsupported platform: 32-bit userland on $machine"
+      echo "linux-amd64"
+      ;;
+    aarch64|arm64|armv8*)
+      if [ "$bits" = "32" ] || [ "$machine" = "armv8l" ]; then
+        echo "linux-arm7"
+      else
+        echo "linux-arm64"
+      fi
+      ;;
+    armv7*)  echo "linux-arm7" ;;
+    armv6*)  echo "linux-arm6" ;;
+    *)       fatal "Unsupported architecture: $machine (userland ${bits:-unknown}-bit)" ;;
   esac
 }
 
 # --- Fetch latest release tag ---
 
 get_latest_version() {
-  need_cmd curl
-  local url="https://api.github.com/repos/${REPO}/releases/latest"
-  curl -fsSL "$url" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/'
+  local url="https://api.github.com/repos/${REPO}/releases/latest" body
+  if ! body="$(curl -fsSL "$url")"; then
+    error "Could not reach $url"
+    error "Check the network, DNS, and the system clock (date: $(date)); a wrong clock breaks TLS"
+    return 1
+  fi
+  printf '%s\n' "$body" | sed -n -E 's/.*"tag_name": *"([^"]+)".*/\1/p' | head -n 1
+}
+
+# Download the release binary for $arch to $dest, verify it against the
+# release checksums, and check that it runs on this machine.
+download_binary() {
+  local version="$1" arch="$2" dest="$3"
+  local base="https://github.com/${REPO}/releases/download/${version}"
+  local name="sms-gateway-${arch}" tmp
+
+  tmp="$(mktemp "${dest}.XXXXXX")"
+  trap "rm -f '$tmp'" EXIT
+
+  info "Downloading sms-gateway ${version} (${arch})..."
+  curl -fsSL -o "$tmp" "${base}/${name}" \
+    || fatal "Download failed: ${base}/${name} (release ${version} may not include ${arch})"
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    local expected actual
+    expected="$(curl -fsSL "${base}/checksums.txt" | awk -v n="$name" '$2 == n { print $1 }')" || expected=""
+    if [ -n "$expected" ]; then
+      actual="$(sha256sum "$tmp" | awk '{ print $1 }')"
+      [ "$expected" = "$actual" ] || fatal "Checksum mismatch for $name (expected $expected, got $actual)"
+      info "Checksum verified"
+    else
+      warn "No checksum published for $name; skipping verification"
+    fi
+  else
+    warn "sha256sum not found; skipping checksum verification"
+  fi
+
+  chmod 755 "$tmp"
+  local out
+  if ! out="$("$tmp" --version 2>&1)"; then
+    fatal "Downloaded binary does not run on this machine ($(uname -m), userland $(userland_bits)-bit): $out"
+  fi
+  info "Binary check: $out"
+
+  # Rename instead of overwriting in place: writing over a binary that the
+  # running service is executing fails with "Text file busy".
+  mv -f "$tmp" "$dest"
+  trap - EXIT
+}
+
+# List serial devices a USB modem usually shows up as.
+list_serial_devices() {
+  local d
+  for d in /dev/ttyUSB* /dev/ttyACM*; do
+    [ -e "$d" ] && printf '%s ' "$d"
+  done
 }
 
 # --- Systemd install ---
 
 install_systemd() {
   need_root
-  need_cmd curl
+  local cmd
+  for cmd in curl systemctl useradd usermod getent mktemp od; do
+    need_cmd "$cmd"
+  done
+  [ -d /run/systemd/system ] || fatal "systemd is not running on this system; use the Docker install instead"
 
-  local arch version binary_url mode
+  local arch version mode
 
   mode="install"
-  if [ -f "${INSTALL_DIR}/sms-gateway" ] || systemctl list-unit-files | grep -q '^sms-gateway.service'; then
+  if [ -f "${INSTALL_DIR}/sms-gateway" ] || [ -f /etc/systemd/system/sms-gateway.service ]; then
     mode="upgrade"
   fi
   info "Mode: ${mode}"
 
+  info "Detected OS: $(detect_os)"
   arch="$(detect_arch)"
-  info "Detected architecture: $arch"
+  info "Detected platform: $(uname -m), userland $(userland_bits)-bit, using ${arch}"
 
   info "Fetching latest release..."
-  version="$(get_latest_version)"
+  version="$(get_latest_version)" || fatal "Could not determine latest version"
   [ -n "$version" ] || fatal "Could not determine latest version"
   info "Latest version: $version"
-
-  binary_url="https://github.com/${REPO}/releases/download/${version}/sms-gateway-${arch}"
 
   # Configuration values used only when creating a new config file.
   local device_path="/dev/ttyUSB2" jwt_secret="" host="127.0.0.1" port="5174"
   if [ "$mode" = "install" ]; then
+    local devices
+    devices="$(list_serial_devices)"
+    if [ -n "$devices" ]; then
+      info "Serial devices found: ${devices}"
+      case " $devices" in
+        *" $device_path "*) ;;
+        *) device_path="${devices%% *}" ;;
+      esac
+    else
+      warn "No /dev/ttyUSB* or /dev/ttyACM* device found; is the modem plugged in?"
+    fi
     prompt device_path "Serial device path" "$device_path"
     prompt host "HTTP listen address (0.0.0.0 to allow other machines)" "$host"
     prompt port "HTTP port" "$port"
@@ -180,9 +287,7 @@ install_systemd() {
   if [ -f "${INSTALL_DIR}/sms-gateway" ]; then
     info "Replacing existing binary"
   fi
-  info "Downloading sms-gateway ${version} (${arch})..."
-  curl -fsSL -o "${INSTALL_DIR}/sms-gateway" "$binary_url"
-  chmod 755 "${INSTALL_DIR}/sms-gateway"
+  download_binary "$version" "$arch" "${INSTALL_DIR}/sms-gateway"
 
   # Write config file (don't overwrite existing)
   local config_file="${INSTALL_DIR}/sms-gateway.conf"
@@ -252,9 +357,18 @@ EOF
     systemctl start sms-gateway
   fi
 
+  # A crashing service still reports active right after start, so give it a
+  # moment before checking.
+  sleep 3
   local service_state service_enabled
   service_state="$(systemctl is-active sms-gateway 2>/dev/null || true)"
   service_enabled="$(systemctl is-enabled sms-gateway 2>/dev/null || true)"
+
+  if [ "$service_state" != "active" ]; then
+    error "sms-gateway is not running (status: ${service_state:-unknown}). Recent logs:"
+    journalctl -u sms-gateway -n 30 --no-pager >&2 || true
+    fatal "Fix the problem above, then run: sudo systemctl restart sms-gateway"
+  fi
 
   info "Installation complete!"
   info ""
