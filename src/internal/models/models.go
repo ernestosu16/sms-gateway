@@ -149,7 +149,9 @@ type ConversationUpdateResponse struct {
 
 // SendSMSRequest is the request body for sending an SMS.
 type SendSMSRequest struct {
-	To   string `json:"to"`
+	// To is an international number with + and country code (spaces, dashes,
+	// dots and parentheses are ignored) or a 3-6 digit short code.
+	To   string `json:"to" example:"+15551234567"`
 	Body string `json:"body"`
 }
 

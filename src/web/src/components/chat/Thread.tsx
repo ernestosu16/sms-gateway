@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import api from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatDayLabel, isSameDay } from '@/lib/format';
-import { notifyUnreadChanged } from '@/lib/messages';
+import { isDialable, notifyUnreadChanged } from '@/lib/messages';
 import { useThread, type ThreadMessage } from '@/lib/useChat';
 import Avatar from '@/components/chat/Avatar';
 import Composer from '@/components/chat/Composer';
@@ -34,6 +34,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
   const { messages, loading, loadingOlder, hasOlder, error, loadOlder, send, remove } =
     useThread(phone);
   const { confirm, dialog } = useConfirm();
+  const canReply = isDialable(phone);
   const location = useLocation();
   const scrollRef = useRef<ComponentRef<'div'>>(null);
   const atBottomRef = useRef(true);
@@ -250,7 +251,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
                     onToggle={() => setExpandedId((id) => (id === msg.id ? null : msg.id))}
                     onCopy={() => handleCopy(msg.body, 'Message')}
                     onDelete={() => handleDeleteMessage(msg)}
-                    onRetry={() => handleRetry(msg)}
+                    onRetry={canReply ? () => handleRetry(msg) : undefined}
                   />
                 </Fragment>
               );
@@ -270,15 +271,25 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
         )}
       </div>
 
-      <Composer
-        autoFocus
-        onSend={(body) => {
-          // The bubble itself reports a failure and offers Retry, so the draft
-          // never needs to come back.
-          send(body);
-          return true;
-        }}
-      />
+      {canReply ? (
+        <Composer
+          autoFocus
+          onSend={(body) => {
+            // The bubble itself reports a failure and offers Retry, so the draft
+            // never needs to come back.
+            send(body);
+            return true;
+          }}
+        />
+      ) : (
+        // Alphanumeric senders cannot receive SMS, and numbers stored before
+        // the + rule lack a country code the server would require to reply.
+        <p className="shrink-0 border-t border-border bg-surface px-4 py-3 text-center text-xs text-fg-muted">
+          {/^\d+$/.test(phone)
+            ? 'This number has no country code, so it cannot be replied to here. Start a new message using its international format (+ and country code).'
+            : 'This sender does not accept replies.'}
+        </p>
+      )}
       {dialog}
     </div>
   );

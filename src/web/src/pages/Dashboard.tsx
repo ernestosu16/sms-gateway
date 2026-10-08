@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
@@ -158,8 +159,12 @@ export default function Dashboard() {
       } else {
         setSendResult({ type: 'error', message: res.data.message || 'Failed to send message.' });
       }
-    } catch {
-      setSendResult({ type: 'error', message: 'Failed to send message.' });
+    } catch (err) {
+      // A 400 carries the reason, e.g. a number not in international format.
+      const reason = isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error
+        : undefined;
+      setSendResult({ type: 'error', message: reason || 'Failed to send message.' });
     } finally {
       setSending(false);
     }
@@ -250,14 +255,18 @@ export default function Dashboard() {
                   {sendResult.message}
                 </Alert>
               )}
-              <Field label="Phone Number" htmlFor="quickTo">
+              <Field
+                label="Phone Number"
+                htmlFor="quickTo"
+                hint="International format: + and country code"
+              >
                 <Input
                   id="quickTo"
                   type="tel"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
                   required
-                  placeholder="+1234567890"
+                  placeholder="+15551234567"
                 />
               </Field>
               <Field label="Message" htmlFor="quickBody">

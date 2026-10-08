@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import {
   chatPath,
   isDialable,
+  RECIPIENT_FORMAT_HINT,
   normalizePhone,
   notifyUnreadChanged,
   type SendSMSResponse,
@@ -21,7 +22,7 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
   const handleSend = async (body: string): Promise<boolean> => {
     const phone = normalizePhone(to);
     if (!isDialable(phone)) {
-      setError('Enter a phone number of up to 20 digits, optionally starting with +.');
+      setError(RECIPIENT_FORMAT_HINT);
       return false;
     }
     setError('');
@@ -67,7 +68,7 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
           autoFocus
           value={to}
           onChange={(e) => setTo(e.target.value)}
-          placeholder="+1 555 123 4567"
+          placeholder="+15551234567"
           aria-invalid={error !== ''}
           aria-describedby={error ? 'new-to-error' : undefined}
           className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-fg placeholder:text-fg-subtle focus:outline-none"
@@ -80,7 +81,8 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
           </div>
         ) : (
           <p className="text-center text-sm text-fg-muted">
-            Enter a number and write your first message.
+            Enter the number in international format, with + and country code (e.g. +15551234567),
+            and write your first message.
           </p>
         )}
       </div>

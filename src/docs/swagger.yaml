@@ -228,6 +228,10 @@ definitions:
       body:
         type: string
       to:
+        description: |-
+          To is an international number with + and country code (spaces, dashes,
+          dots and parentheses are ignored) or a 3-6 digit short code.
+        example: "+15551234567"
         type: string
     type: object
   models.SendSMSResponse:

@@ -1,12 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 )
 
@@ -123,5 +125,45 @@ func TestHandleMarkConversationReadAndDelete(t *testing.T) {
 	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if w.Code != http.StatusOK || resp.Affected != 3 {
 		t.Errorf("delete: status %d affected %d, want 200/3", w.Code, resp.Affected)
+	}
+}
+
+// TestHandleSendSMS_RecipientFormat pins the one accepted recipient format:
+// formatting characters are stripped and the result is stored, but a number
+// without "+" and country code is rejected before anything is stored or sent.
+func TestHandleSendSMS_RecipientFormat(t *testing.T) {
+	tests := []struct {
+		to        string
+		wantCode  int
+		wantPhone string
+	}{
+		{"+1 (555) 123-4567", http.StatusOK, "+15551234567"},
+		{"7726", http.StatusOK, "7726"},
+		{"555-123-4567", http.StatusBadRequest, ""},
+		{"15551234567", http.StatusBadRequest, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.to, func(t *testing.T) {
+			handler, repo := newSMSTestHandler(t)
+			body, _ := json.Marshal(models.SendSMSRequest{To: tt.to, Body: "hi"})
+
+			w := httptest.NewRecorder()
+			handler.HandleSendSMS(w, httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", bytes.NewReader(body)))
+
+			if w.Code != tt.wantCode {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tt.wantCode, w.Body)
+			}
+			total, _ := repo.CountConversations("")
+			if tt.wantPhone == "" {
+				if total != 0 {
+					t.Errorf("rejected send stored %d conversations, want 0", total)
+				}
+				return
+			}
+			got, _ := repo.ListConversations("", database.ListOptions{})
+			if len(got) != 1 || got[0].PhoneNumber != tt.wantPhone {
+				t.Errorf("stored conversations = %+v, want one with %s", got, tt.wantPhone)
+			}
+		})
 	}
 }
