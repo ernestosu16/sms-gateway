@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
 import { describeTyping, toInternational } from '@/lib/phone';
 import { CheckCircleIcon, GlobeIcon } from '@/components/ui';
 
@@ -26,6 +27,7 @@ export default function PhoneInput({
   className,
   ...props
 }: PhoneInputProps) {
+  const { t } = useI18n();
   const details = describeTyping(value);
   const digits = value.length - 1;
   // Only flag a probable typo once the number is long enough to judge.
@@ -58,9 +60,9 @@ export default function PhoneInput({
           {...props}
         />
         {details.valid && (
-          <span className="shrink-0 text-success" title="Valid number">
+          <span className="shrink-0 text-success" title={t('phone.valid')}>
             <CheckCircleIcon className="h-4 w-4" />
-            <span className="sr-only">Valid number</span>
+            <span className="sr-only">{t('phone.valid')}</span>
           </span>
         )}
       </div>
@@ -69,12 +71,12 @@ export default function PhoneInput({
         className={cn('mt-1 truncate text-xs', looksWrong ? 'text-warning' : 'text-fg-subtle')}
       >
         {!value
-          ? 'Start with the country code — the + is added for you.'
+          ? t('phone.start')
           : details.countryName
-            ? `${details.countryName} · +${details.callingCode}${looksWrong ? ' · check the number' : ''}`
+            ? `${details.countryName} · +${details.callingCode}${looksWrong ? ` · ${t('phone.checkNumber')}` : ''}`
             : details.callingCode
-              ? `Country code +${details.callingCode}`
-              : 'Keep typing the country code…'}
+              ? t('phone.countryCode', { code: details.callingCode })
+              : t('phone.keepTyping')}
       </p>
     </div>
   );

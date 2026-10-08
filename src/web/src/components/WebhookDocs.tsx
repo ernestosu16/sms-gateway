@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
+import { useI18n } from '@/lib/i18n';
+import type { MessageKey } from '@/locales/en';
 
 /*
  * Reference for whoever builds the receiving endpoint. Everything here mirrors
@@ -56,33 +58,30 @@ const EXAMPLE_PAYLOADS: Record<ExampleEvent, object> = {
   },
 };
 
-const HEADERS: [string, string][] = [
-  ['Content-Type', 'application/json'],
-  ['User-Agent', 'sms-gateway-webhook'],
-  [
-    'X-Webhook-Id',
-    'Event id, same as "id" in the body. Retries reuse it: use it to skip duplicates.',
-  ],
-  ['X-Webhook-Event', 'Event name, e.g. message.received'],
-  ['X-Webhook-Timestamp', 'Unix time in seconds when this attempt was signed'],
-  [
-    'X-Webhook-Signature',
-    'sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>" keyed with the signing secret>',
-  ],
+// Literal values stay as sent; everything else is a translation key.
+type Description = { text: string } | { key: MessageKey };
+
+const HEADERS: [string, Description][] = [
+  ['Content-Type', { text: 'application/json' }],
+  ['User-Agent', { text: 'sms-gateway-webhook' }],
+  ['X-Webhook-Id', { key: 'docs.header.id' }],
+  ['X-Webhook-Event', { key: 'docs.header.event' }],
+  ['X-Webhook-Timestamp', { key: 'docs.header.timestamp' }],
+  ['X-Webhook-Signature', { key: 'docs.header.signature' }],
 ];
 
-const FIELDS: [string, string][] = [
-  ['id', 'Event id (UUID). Identical on every retry of the same event.'],
-  ['event', 'message.received, message.sent or message.failed'],
-  ['created_at', 'When the event was emitted (RFC 3339, UTC)'],
-  ['data.id', 'Message id, usable with GET /api/v1/sms/{id}'],
-  ['data.direction', 'inbound for message.received, outbound for sent / failed'],
-  ['data.phone_number', 'Sender for inbound messages, recipient for outbound ones'],
-  ['data.body', 'Message text'],
-  ['data.status', 'received, sent or failed'],
-  ['data.api_key_id', 'Only present when the SMS was sent with an API key'],
-  ['data.error_message', 'Only present on message.failed: why the modem rejected it'],
-  ['data.created_at / data.updated_at', 'Message timestamps (RFC 3339, UTC)'],
+const FIELDS: [string, Description][] = [
+  ['id', { key: 'docs.field.id' }],
+  ['event', { key: 'docs.field.event' }],
+  ['created_at', { key: 'docs.field.createdAt' }],
+  ['data.id', { key: 'docs.field.dataId' }],
+  ['data.direction', { key: 'docs.field.direction' }],
+  ['data.phone_number', { key: 'docs.field.phone' }],
+  ['data.body', { key: 'docs.field.body' }],
+  ['data.status', { key: 'docs.field.status' }],
+  ['data.api_key_id', { key: 'docs.field.apiKey' }],
+  ['data.error_message', { key: 'docs.field.error' }],
+  ['data.created_at / data.updated_at', { key: 'docs.field.timestamps' }],
 ];
 
 const VERIFY_SNIPPETS = {
@@ -152,6 +151,7 @@ const inlineCodeClass =
 
 function CodeBlock({ code, label }: { code: string; label: string }) {
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
 
   const handleCopy = async () => {
     try {
@@ -172,7 +172,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
           onClick={handleCopy}
           className="shrink-0 text-xs font-medium text-primary hover:text-primary-hover"
         >
-          {copied ? 'Copied!' : 'Copy'}
+          {copied ? t('common.copied') : t('common.copy')}
         </button>
       </div>
       <pre className="overflow-x-auto bg-code p-4 text-xs leading-relaxed text-code-fg">
@@ -218,7 +218,8 @@ function Tabs<T extends string>({
  * Name/description pairs as a definition list: side by side from sm up,
  * stacked on phones so nothing needs horizontal scrolling.
  */
-function ReferenceList({ rows }: { rows: [string, string][] }) {
+function ReferenceList({ rows }: { rows: [string, Description][] }) {
+  const { t } = useI18n();
   return (
     <dl className="divide-y divide-border rounded-lg border border-border">
       {rows.map(([name, description]) => (
@@ -227,7 +228,9 @@ function ReferenceList({ rows }: { rows: [string, string][] }) {
           className="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] sm:gap-4"
         >
           <dt className="font-mono text-xs break-all text-fg sm:pt-0.5">{name}</dt>
-          <dd className="text-sm text-fg-muted">{description}</dd>
+          <dd className="text-sm text-fg-muted">
+            {'key' in description ? t(description.key) : description.text}
+          </dd>
         </div>
       ))}
     </dl>
@@ -238,6 +241,8 @@ function ReferenceList({ rows }: { rows: [string, string][] }) {
 export default function WebhookDocs({ id }: { id?: string }) {
   const [exampleEvent, setExampleEvent] = useState<ExampleEvent>('message.received');
   const [language, setLanguage] = useState<SnippetLanguage>('Node.js');
+  const { t, rich } = useI18n();
+  const code = { code: (chunk: ReactNode) => <code className={inlineCodeClass}>{chunk}</code> };
 
   return (
     <section
@@ -245,79 +250,54 @@ export default function WebhookDocs({ id }: { id?: string }) {
       className="scroll-mt-6 space-y-6 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6"
     >
       <div>
-        <h2 className="text-lg font-semibold text-fg">What your server receives</h2>
-        <p className={`mt-1 ${textClass}`}>
-          For every subscribed event the gateway sends an HTTP{' '}
-          <code className={inlineCodeClass}>POST</code> to the Delivery URL with a JSON body.
-          Respond with any <code className={inlineCodeClass}>2xx</code> status within 10 seconds;
-          the response body is ignored.
-        </p>
+        <h2 className="text-lg font-semibold text-fg">{t('docs.title')}</h2>
+        <p className={`mt-1 ${textClass}`}>{rich('docs.intro', code)}</p>
       </div>
 
       <div className="space-y-3">
-        <h3 className={sectionTitleClass}>Headers</h3>
+        <h3 className={sectionTitleClass}>{t('docs.headers')}</h3>
         <ReferenceList rows={HEADERS} />
       </div>
 
       <div className="space-y-3">
-        <h3 className={sectionTitleClass}>Body</h3>
+        <h3 className={sectionTitleClass}>{t('docs.body')}</h3>
         <Tabs
-          label="Example event"
+          label={t('docs.exampleEvent')}
           options={Object.keys(EXAMPLE_PAYLOADS) as ExampleEvent[]}
           value={exampleEvent}
           onChange={setExampleEvent}
         />
         <CodeBlock
-          label={`${exampleEvent} example`}
+          label={t('docs.example', { event: exampleEvent })}
           code={JSON.stringify(EXAMPLE_PAYLOADS[exampleEvent], null, 2)}
         />
         <ReferenceList rows={FIELDS} />
       </div>
 
       <div className="space-y-3">
-        <h3 className={sectionTitleClass}>Verifying the signature</h3>
+        <h3 className={sectionTitleClass}>{t('docs.verify')}</h3>
         <ol className={`list-decimal space-y-1 pl-5 ${textClass}`}>
-          <li>
-            Read the raw request body before parsing it. Re-serialized JSON will not match the
-            signature.
-          </li>
-          <li>
-            Compute{' '}
-            <code className={inlineCodeClass}>HMAC-SHA256(secret, timestamp + "." + body)</code> as
-            lowercase hex and prefix it with <code className={inlineCodeClass}>sha256=</code>.
-          </li>
-          <li>
-            Compare it with <code className={inlineCodeClass}>X-Webhook-Signature</code> using a
-            constant-time comparison.
-          </li>
-          <li>Reject timestamps more than 5 minutes old to block replayed requests.</li>
+          <li>{t('docs.verify.1')}</li>
+          <li>{rich('docs.verify.2', code)}</li>
+          <li>{rich('docs.verify.3', code)}</li>
+          <li>{t('docs.verify.4')}</li>
         </ol>
         <Tabs
-          label="Example language"
+          label={t('docs.exampleLanguage')}
           options={Object.keys(VERIFY_SNIPPETS) as SnippetLanguage[]}
           value={language}
           onChange={setLanguage}
         />
-        <CodeBlock label={`${language} receiver`} code={VERIFY_SNIPPETS[language]} />
+        <CodeBlock label={t('docs.receiver', { language })} code={VERIFY_SNIPPETS[language]} />
       </div>
 
       <div className="space-y-3">
-        <h3 className={sectionTitleClass}>Delivery and retries</h3>
+        <h3 className={sectionTitleClass}>{t('docs.retries')}</h3>
         <ul className={`list-disc space-y-1 pl-5 ${textClass}`}>
-          <li>
-            A non-2xx response, a timeout, a connection error or a redirect (redirects are never
-            followed) counts as a failure.
-          </li>
-          <li>
-            Failed deliveries are retried after 5 seconds, 30 seconds and 2 minutes, for at most 4
-            attempts. Each attempt is signed again with a fresh timestamp.
-          </li>
-          <li>
-            Retries are kept in memory: anything still pending when the gateway restarts is dropped.
-            Use <code className={inlineCodeClass}>GET /api/v1/sms/inbox</code> to reconcile after an
-            outage on your side.
-          </li>
-          <li>Paused webhooks receive nothing until they are resumed.</li>
+          <li>{t('docs.retries.1')}</li>
+          <li>{t('docs.retries.2')}</li>
+          <li>{rich('docs.retries.3', code)}</li>
+          <li>{t('docs.retries.4')}</li>
         </ul>
       </div>
     </section>

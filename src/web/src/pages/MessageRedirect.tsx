@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { chatPath, type Message } from '@/lib/messages';
 import { Alert, Button, LoadingState } from '@/components/ui';
 
@@ -11,6 +12,7 @@ import { Alert, Button, LoadingState } from '@/components/ui';
 export default function MessageRedirect() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -29,13 +31,13 @@ export default function MessageRedirect() {
     };
   }, [id, navigate]);
 
-  if (!error) return <LoadingState label="Opening message…" />;
+  if (!error) return <LoadingState label={t('redirect.opening')} />;
 
   return (
     <div className="space-y-4">
-      <Alert>Message not found.</Alert>
+      <Alert>{t('redirect.notFound')}</Alert>
       <Button variant="secondary" onClick={() => navigate('/chats')}>
-        Back to messages
+        {t('redirect.back')}
       </Button>
     </div>
   );

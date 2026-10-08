@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
 
 interface ResizeHandleProps extends ComponentProps<'div'> {
   /** Accessible name, e.g. "Resize navigation". */
@@ -13,13 +14,14 @@ interface ResizeHandleProps extends ComponentProps<'div'> {
  * resize, double-click to reset, arrow keys and Home when focused.
  */
 export function ResizeHandle({ label, dragging, className, ...props }: ResizeHandleProps) {
+  const { t } = useI18n();
   return (
     <div
       role="separator"
       aria-orientation="vertical"
       aria-label={label}
       tabIndex={0}
-      title="Drag to resize, double-click to reset"
+      title={t('resize.hint')}
       {...props}
       className={cn(
         'group absolute inset-y-0 -right-1.5 z-10 w-3 cursor-col-resize touch-none focus-visible:outline-none',

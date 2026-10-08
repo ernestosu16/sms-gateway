@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useMatch, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
 import { useResizablePanel } from '@/lib/useResizablePanel';
 import { normalizePhone } from '@/lib/messages';
 import { useConversations } from '@/lib/useChat';
@@ -18,6 +19,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 export default function Chats() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const params = useParams<{ phone?: string }>();
   const isNew = useMatch('/chats/new') !== null;
   const phone = params.phone ? normalizePhone(params.phone) : undefined;
@@ -64,7 +66,7 @@ export default function Chats() {
           onLoadMore={conversations.loadMore}
         />
         <ResizeHandle
-          label="Resize conversation list"
+          label={t('chat.resizeList')}
           dragging={listPanel.dragging}
           {...listPanel.handleProps}
           className="hidden lg:block"
@@ -88,8 +90,8 @@ export default function Chats() {
           <div className="flex h-full items-center justify-center bg-app">
             <EmptyState
               icon={<MessageIcon className="h-6 w-6" />}
-              title="No conversation selected"
-              description="Pick a conversation or start a new one."
+              title={t('chat.noSelection')}
+              description={t('chat.noSelectionHint')}
             />
           </div>
         )}

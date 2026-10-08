@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
 import { formatDateTime, formatTime } from '@/lib/format';
 import { linkify } from '@/lib/linkify';
 import type { ThreadMessage } from '@/lib/useChat';
+import type { MessageKey } from '@/locales/en';
 import { AlertIcon, Button, CheckIcon, ClockIcon, CopyIcon, TrashIcon } from '@/components/ui';
 
 interface MessageBubbleProps {
@@ -19,23 +21,38 @@ interface MessageBubbleProps {
 }
 
 function StatusIndicator({ status }: { status: string }) {
+  const { t } = useI18n();
   if (status === 'pending' || status === 'sending') {
     return (
-      <span title="Sending" className="inline-flex">
+      <span title={t('status.sending')} className="inline-flex">
         <ClockIcon className="h-3.5 w-3.5" />
-        <span className="sr-only">Sending</span>
+        <span className="sr-only">{t('status.sending')}</span>
       </span>
     );
   }
   if (status === 'sent') {
     return (
-      <span title="Sent" className="inline-flex">
+      <span title={t('status.sent')} className="inline-flex">
         <CheckIcon className="h-3.5 w-3.5" />
-        <span className="sr-only">Sent</span>
+        <span className="sr-only">{t('status.sent')}</span>
       </span>
     );
   }
   return null;
+}
+
+const STATUS_LABELS: Record<string, MessageKey> = {
+  pending: 'status.pending',
+  sending: 'status.sending',
+  sent: 'status.sent',
+  failed: 'status.failed',
+  received: 'status.unread',
+  read: 'status.read',
+};
+
+function statusLabel(status: string, t: (key: MessageKey) => string): string {
+  const key = STATUS_LABELS[status];
+  return key ? t(key) : status;
 }
 
 // Long enough to tell a single click from the start of a double click.
@@ -51,6 +68,7 @@ export default function MessageBubble({
   onDelete,
   onRetry,
 }: MessageBubbleProps) {
+  const { t } = useI18n();
   const clickTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(clickTimer.current), []);
   const outbound = message.direction === 'outbound';
@@ -117,7 +135,7 @@ export default function MessageBubble({
             onToggle();
           }}
           aria-expanded={expanded}
-          aria-label={`Message details, ${formatTime(message.created_at)}`}
+          aria-label={t('bubble.details', { time: formatTime(message.created_at) })}
           className={cn(
             'mt-1 ml-auto flex items-center justify-end gap-1 rounded text-[11px] leading-none',
             'focus-visible:ring-2 focus-visible:ring-current focus-visible:outline-none',
@@ -132,14 +150,14 @@ export default function MessageBubble({
       {failed && (
         <div className="mt-1 flex items-center gap-1.5 text-xs text-danger">
           <AlertIcon className="h-4 w-4" />
-          <span>Not sent</span>
+          <span>{t('bubble.notSent')}</span>
           {onRetry && (
             <button
               type="button"
               onClick={onRetry}
               className="font-semibold underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
             >
-              Retry
+              {t('bubble.retry')}
             </button>
           )}
         </div>
@@ -148,27 +166,27 @@ export default function MessageBubble({
       {expanded && (
         <div className="mt-1 w-full max-w-[85%] rounded-lg border border-border bg-surface p-3 text-xs text-fg-muted shadow-sm sm:max-w-[70%]">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            <dt className="font-medium text-fg">Status</dt>
-            <dd className="capitalize">
-              {message.status === 'received' ? 'unread' : message.status}
-            </dd>
-            <dt className="font-medium text-fg">{outbound ? 'Sent' : 'Received'}</dt>
+            <dt className="font-medium text-fg">{t('common.status')}</dt>
+            <dd>{statusLabel(message.status, t)}</dd>
+            <dt className="font-medium text-fg">
+              {outbound ? t('status.sent') : t('status.received')}
+            </dt>
             <dd>{formatDateTime(message.created_at)}</dd>
             {!message.pending && (
               <>
-                <dt className="font-medium text-fg">ID</dt>
+                <dt className="font-medium text-fg">{t('bubble.id')}</dt>
                 <dd className="font-mono break-all">{message.id}</dd>
               </>
             )}
             {message.error_message && (
               <>
-                <dt className="font-medium text-danger">Error</dt>
+                <dt className="font-medium text-danger">{t('bubble.error')}</dt>
                 <dd className="break-words text-danger">{message.error_message}</dd>
               </>
             )}
             {message.modem_response && (
               <>
-                <dt className="font-medium text-fg">Modem</dt>
+                <dt className="font-medium text-fg">{t('bubble.modem')}</dt>
                 <dd className="font-mono break-all whitespace-pre-wrap">
                   {message.modem_response}
                 </dd>
@@ -182,7 +200,7 @@ export default function MessageBubble({
               icon={<CopyIcon className="h-4 w-4" />}
               onClick={onCopy}
             >
-              Copy
+              {t('common.copy')}
             </Button>
             <Button
               size="sm"
@@ -192,7 +210,7 @@ export default function MessageBubble({
               disabled={message.pending}
               className="text-danger hover:bg-danger-soft hover:text-danger-soft-fg"
             >
-              Delete
+              {t('common.delete')}
             </Button>
           </div>
         </div>

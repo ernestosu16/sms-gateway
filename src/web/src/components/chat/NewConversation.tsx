@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import {
   chatPath,
   isDialable,
-  RECIPIENT_FORMAT_HINT,
   notifyConversationsChanged,
   type SendSMSResponse,
 } from '@/lib/messages';
@@ -17,6 +17,7 @@ import { Alert, ArrowLeftIcon, Button } from '@/components/ui';
 
 export default function NewConversation({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [to, setTo] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -25,7 +26,7 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
     // PhoneInput already keeps the value as "+" and digits only.
     const phone = to;
     if (!isDialable(phone)) {
-      setError(RECIPIENT_FORMAT_HINT);
+      setError(t('phone.formatHint'));
       return false;
     }
     setError('');
@@ -40,7 +41,7 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
     } catch (err) {
       setError(
         (isAxiosError(err) && (err.response?.data as { error?: string } | undefined)?.error) ||
-          'Failed to send message.',
+          t('chat.sendFailed'),
       );
       return false;
     } finally {
@@ -57,17 +58,17 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
           variant="ghost"
           size="icon"
           onClick={onBack}
-          aria-label="Back to conversations"
+          aria-label={t('chat.back')}
           className="lg:hidden"
         >
           <ArrowLeftIcon />
         </Button>
-        <h2 className="pl-1 font-semibold text-fg">New message</h2>
+        <h2 className="pl-1 font-semibold text-fg">{t('chat.newMessage')}</h2>
       </header>
 
       <div className="shrink-0 border-b border-border bg-surface px-4 py-3">
         <label htmlFor="new-to" className="mb-1.5 block text-xs font-medium text-fg-muted">
-          To
+          {t('chat.to')}
         </label>
         <PhoneInput
           id="new-to"
@@ -93,13 +94,11 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
             <Avatar phone={to} size="lg" />
             <p className="mt-3 text-lg font-semibold text-fg">{details.formatted}</p>
             {details.countryName && <p className="text-sm text-fg-muted">{details.countryName}</p>}
-            <p className="mt-4 text-sm text-fg-subtle">Write your first message below.</p>
+            <p className="mt-4 text-sm text-fg-subtle">{t('chat.firstMessage')}</p>
           </div>
         ) : (
           !error && (
-            <p className="max-w-sm text-center text-sm text-fg-muted">
-              Type the number starting with the country code. The country is detected automatically.
-            </p>
+            <p className="max-w-sm text-center text-sm text-fg-muted">{t('chat.typeNumber')}</p>
           )
         )}
       </div>

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { isAxiosError } from 'axios';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { useI18n } from '@/lib/i18n';
 import AuthShell from '@/components/AuthShell';
 import { Alert, Button, Field, Input } from '@/components/ui';
 
@@ -12,6 +13,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -26,9 +28,7 @@ export default function Login() {
       navigate('/');
     } catch (err) {
       setError(
-        isAxiosError(err) && err.response?.status === 429
-          ? 'Too many failed attempts. Try again in a few minutes.'
-          : 'Invalid username or password',
+        isAxiosError(err) && err.response?.status === 429 ? t('login.tooMany') : t('login.invalid'),
       );
     } finally {
       setLoading(false);
@@ -36,10 +36,10 @@ export default function Login() {
   };
 
   return (
-    <AuthShell title="Sign in" description="Use your gateway account to continue.">
+    <AuthShell title={t('login.title')} description={t('login.description')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <Alert>{error}</Alert>}
-        <Field label="Username" htmlFor="username">
+        <Field label={t('common.username')} htmlFor="username">
           <Input
             id="username"
             type="text"
@@ -51,7 +51,7 @@ export default function Login() {
             autoCapitalize="none"
           />
         </Field>
-        <Field label="Password" htmlFor="password">
+        <Field label={t('common.password')} htmlFor="password">
           <Input
             id="password"
             type="password"
@@ -62,7 +62,7 @@ export default function Login() {
           />
         </Field>
         <Button type="submit" loading={loading} className="w-full">
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? t('login.submitting') : t('login.submit')}
         </Button>
       </form>
     </AuthShell>

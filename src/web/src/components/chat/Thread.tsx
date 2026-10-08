@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentR
 import { useLocation } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatDayLabel, isSameDay } from '@/lib/format';
 import { isDialable, MAX_CONTACT_NAME, notifyConversationsChanged } from '@/lib/messages';
@@ -41,6 +42,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
   const { messages, loading, loadingOlder, hasOlder, error, loadOlder, send, remove } =
     useThread(phone);
   const { confirm, dialog } = useConfirm();
+  const { t, rich } = useI18n();
   const canReply = isDialable(phone);
   const contact = describePhone(phone);
   const { name: contactName, save: saveContact } = useContact(phone);
@@ -116,20 +118,20 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
     setShowJump(false);
   };
 
-  const handleCopy = async (text: string, what: string) => {
+  const handleCopy = async (text: string, copiedNotice: string) => {
     try {
       await copyToClipboard(text);
-      setNotice(`${what} copied`);
+      setNotice(copiedNotice);
     } catch {
-      setNotice('Copy failed');
+      setNotice(t('thread.copyFailed'));
     }
   };
 
   const handleDeleteMessage = async (msg: ThreadMessage) => {
     const ok = await confirm({
-      title: 'Delete this message?',
-      description: 'It is removed from the gateway. This cannot be undone.',
-      confirmLabel: 'Delete',
+      title: t('thread.deleteMessageTitle'),
+      description: t('thread.deleteMessageBody'),
+      confirmLabel: t('common.delete'),
     });
     if (!ok) return;
     try {
@@ -137,20 +139,19 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
       setExpandedId(null);
       notifyConversationsChanged();
     } catch {
-      setNotice('Failed to delete message');
+      setNotice(t('thread.deleteMessageFailed'));
     }
   };
 
   const handleDeleteConversation = async () => {
     const ok = await confirm({
-      title: 'Delete conversation?',
-      description: (
-        <>
-          Every message sent to or received from <strong className="text-fg">{displayName}</strong>{' '}
-          is removed. This cannot be undone.
-        </>
+      title: t('thread.deleteConversationTitle'),
+      description: rich(
+        'thread.deleteConversationBody',
+        { b: (chunk) => <strong className="text-fg">{chunk}</strong> },
+        { name: displayName },
       ),
-      confirmLabel: 'Delete conversation',
+      confirmLabel: t('thread.deleteConversation'),
     });
     if (!ok) return;
     try {
@@ -158,7 +159,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
       notifyConversationsChanged();
       onDeleted();
     } catch {
-      setNotice('Failed to delete conversation');
+      setNotice(t('thread.deleteConversationFailed'));
     }
   };
 
@@ -172,11 +173,11 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
     try {
       await saveContact(nameDraft);
       setEditingName(false);
-      setNotice(nameDraft.trim() ? 'Name saved' : 'Name removed');
+      setNotice(nameDraft.trim() ? t('thread.nameSaved') : t('thread.nameRemoved'));
     } catch (err) {
       setNotice(
         (isAxiosError(err) && (err.response?.data as { error?: string } | undefined)?.error) ||
-          'Failed to save name',
+          t('thread.nameFailed'),
       );
     } finally {
       setSavingName(false);
@@ -197,7 +198,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
           variant="ghost"
           size="icon"
           onClick={onBack}
-          aria-label="Back to conversations"
+          aria-label={t('chat.back')}
           className="lg:hidden"
         >
           <ArrowLeftIcon />
@@ -212,7 +213,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
             }}
           >
             <label htmlFor="contact-name" className="sr-only">
-              Contact name
+              {t('thread.contactName')}
             </label>
             <Input
               id="contact-name"
@@ -222,7 +223,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
                 if (e.key === 'Escape') setEditingName(false);
               }}
               maxLength={MAX_CONTACT_NAME}
-              placeholder="Contact name"
+              placeholder={t('thread.contactName')}
               autoFocus
               className="h-9"
             />
@@ -230,8 +231,8 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
               type="submit"
               size="icon"
               loading={savingName}
-              aria-label="Save name"
-              title="Save name (Enter)"
+              aria-label={t('thread.saveName')}
+              title={t('thread.saveNameTitle')}
             >
               {!savingName && <CheckIcon className="h-[18px] w-[18px]" />}
             </Button>
@@ -239,8 +240,8 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
               variant="ghost"
               size="icon"
               onClick={() => setEditingName(false)}
-              aria-label="Cancel"
-              title="Cancel (Esc)"
+              aria-label={t('common.cancel')}
+              title={t('thread.cancelTitle')}
             >
               <XIcon className="h-[18px] w-[18px]" />
             </Button>
@@ -260,17 +261,17 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
               variant="ghost"
               size="icon"
               onClick={startEditingName}
-              aria-label={contactName ? 'Edit contact name' : 'Add contact name'}
-              title={contactName ? 'Edit name' : 'Add name'}
+              aria-label={contactName ? t('thread.editContactName') : t('thread.addContactName')}
+              title={contactName ? t('thread.editName') : t('thread.addName')}
             >
               <PencilIcon className="h-[18px] w-[18px]" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleCopy(phone, 'Number')}
-              aria-label="Copy phone number"
-              title="Copy phone number"
+              onClick={() => handleCopy(phone, t('thread.copiedNumber'))}
+              aria-label={t('thread.copyNumber')}
+              title={t('thread.copyNumber')}
             >
               <CopyIcon className="h-[18px] w-[18px]" />
             </Button>
@@ -278,8 +279,8 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
               variant="ghost"
               size="icon"
               onClick={handleDeleteConversation}
-              aria-label="Delete conversation"
-              title="Delete conversation"
+              aria-label={t('thread.deleteConversation')}
+              title={t('thread.deleteConversation')}
               className="hover:bg-danger-soft hover:text-danger-soft-fg"
             >
               <TrashIcon className="h-[18px] w-[18px]" />
@@ -300,13 +301,13 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
           onScroll={handleScroll}
           role="log"
           aria-live="polite"
-          aria-label={`Messages with ${displayName}`}
+          aria-label={t('thread.messagesWith', { name: displayName })}
           className="h-full overflow-y-auto overscroll-contain bg-app px-3 pb-4 sm:px-6"
         >
           {hasOlder && (
             <div className="flex justify-center pt-3">
               <Button variant="ghost" size="sm" onClick={loadOlder} loading={loadingOlder}>
-                Load older messages
+                {t('thread.loadOlder')}
               </Button>
             </div>
           )}
@@ -314,11 +315,9 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
           {error && <Alert className="mx-auto mt-3 max-w-md">{error}</Alert>}
 
           {loading ? (
-            <LoadingState label="Loading messages…" />
+            <LoadingState label={t('thread.loadingMessages')} />
           ) : messages.length === 0 ? (
-            <p className="py-20 text-center text-sm text-fg-muted">
-              No messages yet. Say hello below.
-            </p>
+            <p className="py-20 text-center text-sm text-fg-muted">{t('thread.empty')}</p>
           ) : (
             messages.map((msg, i) => {
               const prev = messages[i - 1];
@@ -344,7 +343,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
                     highlighted={msg.id === highlightId}
                     expanded={msg.id === expandedId}
                     onToggle={() => setExpandedId((id) => (id === msg.id ? null : msg.id))}
-                    onCopy={() => handleCopy(msg.body, 'Message')}
+                    onCopy={() => handleCopy(msg.body, t('thread.copiedMessage'))}
                     onDelete={() => handleDeleteMessage(msg)}
                     onRetry={canReply ? () => handleRetry(msg) : undefined}
                   />
@@ -361,7 +360,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
             icon={<ArrowDownIcon className="h-4 w-4" />}
             className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-lg"
           >
-            New messages
+            {t('thread.newMessages')}
           </Button>
         )}
       </div>
@@ -380,9 +379,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
         // Alphanumeric senders cannot receive SMS, and numbers stored before
         // the + rule lack a country code the server would require to reply.
         <p className="shrink-0 border-t border-border bg-surface px-4 py-3 text-center text-xs text-fg-muted">
-          {/^\d+$/.test(phone)
-            ? 'This number has no country code, so it cannot be replied to here. Start a new message using its international format (+ and country code).'
-            : 'This sender does not accept replies.'}
+          {/^\d+$/.test(phone) ? t('thread.noCountryCode') : t('thread.noReplies')}
         </p>
       )}
       {dialog}

@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
 
 /**
  * Where a column lands in the stacked card shown below the table breakpoint:
@@ -63,6 +64,7 @@ export function DataTable<T extends { id: string }>({
   busy = false,
   breakpoint = 'md',
 }: DataTableProps<T>) {
+  const { t } = useI18n();
   const allSelected =
     selection !== undefined && rows.length > 0 && selection.selected.size === rows.length;
 
@@ -84,7 +86,7 @@ export function DataTable<T extends { id: string }>({
         checked={selection.selected.has(row.id)}
         onChange={() => selection.onToggle(row.id)}
         onClick={(e) => e.stopPropagation()}
-        aria-label="Select row"
+        aria-label={t('table.selectRow')}
       />
     );
 

@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { isAxiosError } from 'axios';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
+import type { MessageKey } from '@/locales/en';
 import { copyToClipboard } from '@/lib/clipboard';
 import Pagination from '@/components/Pagination';
 import WebhookDocs from '@/components/WebhookDocs';
@@ -39,21 +41,21 @@ interface Webhook {
 }
 
 // Mirrors models.WebhookEvents on the server, which rejects anything else.
-const EVENT_OPTIONS: { value: WebhookEvent; label: string; description: string }[] = [
+const EVENT_OPTIONS: { value: WebhookEvent; label: MessageKey; description: MessageKey }[] = [
   {
     value: 'message.received',
-    label: 'Message received',
-    description: 'An inbound SMS arrived.',
+    label: 'webhooks.event.received',
+    description: 'webhooks.event.receivedHint',
   },
   {
     value: 'message.sent',
-    label: 'Message sent',
-    description: 'The modem accepted an outbound SMS.',
+    label: 'webhooks.event.sent',
+    description: 'webhooks.event.sentHint',
   },
   {
     value: 'message.failed',
-    label: 'Message failed',
-    description: 'The modem rejected an outbound SMS.',
+    label: 'webhooks.event.failed',
+    description: 'webhooks.event.failedHint',
   },
 ];
 
@@ -84,13 +86,14 @@ function maskSecret(secret: string) {
 
 export default function Webhooks() {
   const { user } = useAuth();
+  const { t } = useI18n();
 
   // Checked before mounting the manager so non-admins never hit the admin-only API.
   if (!user?.is_admin) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Webhooks" />
-        <Alert>You do not have permission to view this page. Admin access is required.</Alert>
+        <PageHeader title={t('nav.webhooks')} />
+        <Alert>{t('common.adminOnly')}</Alert>
       </div>
     );
   }
@@ -99,6 +102,7 @@ export default function Webhooks() {
 }
 
 function WebhookManager() {
+  const { t, rich } = useI18n();
   const {
     items: webhooks,
     total,
@@ -168,15 +172,17 @@ function WebhookManager() {
     try {
       if (editing) {
         await api.put(`/webhooks/${editing.id}`, payload);
-        setSuccess(`Webhook "${payload.name}" updated.`);
+        setSuccess(t('webhooks.updated', { name: payload.name }));
       } else {
         await api.post('/webhooks', payload);
-        setSuccess(`Webhook "${payload.name}" created.`);
+        setSuccess(t('webhooks.createdOk', { name: payload.name }));
       }
       resetForm();
       refresh();
     } catch (err) {
-      setActionError(errorMessage(err, `Failed to ${editing ? 'update' : 'create'} webhook.`));
+      setActionError(
+        errorMessage(err, editing ? t('webhooks.updateFailed') : t('webhooks.createFailed')),
+      );
     } finally {
       setSaving(false);
     }
@@ -194,15 +200,15 @@ function WebhookManager() {
       });
       refresh();
     } catch (err) {
-      setActionError(errorMessage(err, 'Failed to update webhook.'));
+      setActionError(errorMessage(err, t('webhooks.updateFailed')));
     }
   };
 
   const handleDelete = async (hook: Webhook) => {
     const confirmed = await confirm({
-      title: `Delete "${hook.name}"?`,
-      description: 'Deliveries to this URL stop immediately. This cannot be undone.',
-      confirmLabel: 'Delete',
+      title: t('webhooks.deleteTitle', { name: hook.name }),
+      description: t('webhooks.deleteBody'),
+      confirmLabel: t('common.delete'),
     });
     if (!confirmed) return;
     setActionError('');
@@ -212,7 +218,7 @@ function WebhookManager() {
       if (editing?.id === hook.id) resetForm();
       removeItems(new Set([hook.id]));
     } catch (err) {
-      setActionError(errorMessage(err, 'Failed to delete webhook.'));
+      setActionError(errorMessage(err, t('webhooks.deleteFailed')));
     }
   };
 
@@ -222,7 +228,7 @@ function WebhookManager() {
       setCopiedId(hook.id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      setActionError('Failed to copy to clipboard.');
+      setActionError(t('common.copyFailed'));
     }
   };
 
@@ -241,27 +247,27 @@ function WebhookManager() {
   const columns: Column<Webhook>[] = [
     {
       key: 'name',
-      header: 'Name',
+      header: t('common.name'),
       mobile: 'title',
       className: 'font-medium whitespace-nowrap text-fg',
       cell: (hook) => hook.name,
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status'),
       mobile: 'title',
       cell: (hook) =>
         hook.is_active ? (
           <Badge tone="success" dot>
-            Active
+            {t('common.active')}
           </Badge>
         ) : (
-          <Badge dot>Paused</Badge>
+          <Badge dot>{t('webhooks.paused')}</Badge>
         ),
     },
     {
       key: 'url',
-      header: 'Delivery URL',
+      header: t('webhooks.url'),
       mobile: 'body',
       cell: (hook) => (
         <span
@@ -274,7 +280,7 @@ function WebhookManager() {
     },
     {
       key: 'events',
-      header: 'Events',
+      header: t('webhooks.events'),
       cell: (hook) => (
         <div className="flex flex-wrap gap-1">
           {hook.events.map((event) => (
@@ -287,7 +293,7 @@ function WebhookManager() {
     },
     {
       key: 'secret',
-      header: 'Secret',
+      header: t('webhooks.secret'),
       cell: (hook) => (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <code className="font-mono text-xs break-all text-fg-muted">
@@ -295,10 +301,10 @@ function WebhookManager() {
           </code>
           <span className="flex gap-3">
             <Button variant="link" onClick={() => toggleReveal(hook.id)}>
-              {revealed.has(hook.id) ? 'Hide' : 'Show'}
+              {revealed.has(hook.id) ? t('webhooks.hide') : t('webhooks.show')}
             </Button>
             <Button variant="link" onClick={() => handleCopy(hook)}>
-              {copiedId === hook.id ? 'Copied!' : 'Copy'}
+              {copiedId === hook.id ? t('common.copied') : t('common.copy')}
             </Button>
           </span>
         </div>
@@ -306,24 +312,24 @@ function WebhookManager() {
     },
     {
       key: 'created',
-      header: 'Created',
+      header: t('common.created'),
       className: 'text-fg-muted',
       cell: (hook) => formatDate(hook.created_at),
     },
     {
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="sr-only">{t('common.actions')}</span>,
       mobile: 'footer',
       cell: (hook) => (
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
           <Button variant="secondary" size="sm" onClick={() => startEdit(hook)}>
-            Edit
+            {t('common.edit')}
           </Button>
           <Button variant="secondary" size="sm" onClick={() => handleToggleActive(hook)}>
-            {hook.is_active ? 'Pause' : 'Resume'}
+            {hook.is_active ? t('webhooks.pause') : t('webhooks.resume')}
           </Button>
           <Button variant="danger-soft" size="sm" onClick={() => handleDelete(hook)}>
-            Delete
+            {t('common.delete')}
           </Button>
         </div>
       ),
@@ -333,20 +339,18 @@ function WebhookManager() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Webhooks"
-        description={
-          <>
-            Get notified in real time when messages arrive or finish sending. Each delivery is a
-            JSON POST signed with the webhook&apos;s secret in the{' '}
-            <code className="font-mono text-xs">X-Webhook-Signature</code> header.{' '}
+        title={t('nav.webhooks')}
+        description={rich('webhooks.description', {
+          code: (chunk) => <code className="font-mono text-xs">{chunk}</code>,
+          link: (chunk) => (
             <a
               href="#webhook-docs"
               className="font-medium text-primary hover:text-primary-hover hover:underline"
             >
-              See what your server receives
+              {chunk}
             </a>
-          </>
-        }
+          ),
+        })}
       />
 
       {error && <Alert>{error}</Alert>}
@@ -354,11 +358,13 @@ function WebhookManager() {
 
       {/* Create / edit form */}
       <Card>
-        <CardHeader title={editing ? `Edit Webhook "${editing.name}"` : 'Create New Webhook'} />
+        <CardHeader
+          title={editing ? t('webhooks.edit', { name: editing.name }) : t('webhooks.createTitle')}
+        />
         <CardBody>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Name" htmlFor="webhookName">
+              <Field label={t('common.name')} htmlFor="webhookName">
                 <Input
                   id="webhookName"
                   type="text"
@@ -366,10 +372,10 @@ function WebhookManager() {
                   onChange={(e) => setName(e.target.value)}
                   required
                   maxLength={100}
-                  placeholder="e.g. Alerting bot"
+                  placeholder={t('webhooks.namePlaceholder')}
                 />
               </Field>
-              <Field label="Delivery URL" htmlFor="webhookUrl">
+              <Field label={t('webhooks.url')} htmlFor="webhookUrl">
                 <Input
                   id="webhookUrl"
                   type="url"
@@ -382,12 +388,12 @@ function WebhookManager() {
             </div>
 
             <Field
-              label="Signing Secret"
+              label={t('webhooks.signingSecret')}
               htmlFor="webhookSecret"
               hint={
                 <>
-                  At least 16 characters. Used as the HMAC-SHA256 key for every delivery.
-                  {editing && ' Saving a new secret replaces the current one immediately.'}
+                  {t('webhooks.secretHint')}
+                  {editing && t('webhooks.secretHintEdit')}
                 </>
               }
             >
@@ -400,21 +406,19 @@ function WebhookManager() {
                   minLength={16}
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder={
-                    editing
-                      ? 'Leave blank to keep the current secret'
-                      : 'Leave blank to generate one'
-                  }
+                  placeholder={editing ? t('webhooks.secretKeep') : t('webhooks.secretGenerate')}
                   className="font-mono"
                 />
                 <Button variant="secondary" onClick={() => setSecret(generateSecret())}>
-                  Generate
+                  {t('webhooks.generate')}
                 </Button>
               </div>
             </Field>
 
             <fieldset>
-              <legend className="mb-1.5 block text-sm font-medium text-fg">Events</legend>
+              <legend className="mb-1.5 block text-sm font-medium text-fg">
+                {t('webhooks.events')}
+              </legend>
               <div className="grid gap-2 sm:grid-cols-3">
                 {EVENT_OPTIONS.map((option) => {
                   const checked = events.includes(option.value);
@@ -435,12 +439,12 @@ function WebhookManager() {
                         className="mt-0.5"
                       />
                       <span className="min-w-0">
-                        <span className="block font-medium text-fg">{option.label}</span>
+                        <span className="block font-medium text-fg">{t(option.label)}</span>
                         <code className="block font-mono text-xs text-fg-subtle">
                           {option.value}
                         </code>
                         <span className="mt-1 block text-xs text-fg-muted">
-                          {option.description}
+                          {t(option.description)}
                         </span>
                       </span>
                     </label>
@@ -448,18 +452,22 @@ function WebhookManager() {
                 })}
               </div>
               {events.length === 0 && (
-                <p className="mt-1.5 text-xs text-danger">Select at least one event.</p>
+                <p className="mt-1.5 text-xs text-danger">{t('webhooks.selectEvent')}</p>
               )}
             </fieldset>
 
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               {editing && (
                 <Button variant="secondary" onClick={resetForm}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
               )}
               <Button type="submit" disabled={events.length === 0} loading={saving}>
-                {saving ? 'Saving...' : editing ? 'Save Changes' : 'Create Webhook'}
+                {saving
+                  ? t('common.saving')
+                  : editing
+                    ? t('common.saveChanges')
+                    : t('webhooks.create')}
               </Button>
             </div>
           </form>
@@ -469,9 +477,9 @@ function WebhookManager() {
       {/* Webhooks table */}
       <Card className="overflow-hidden">
         {loading ? (
-          <LoadingState label="Loading webhooks..." />
+          <LoadingState label={t('webhooks.loading')} />
         ) : webhooks.length === 0 ? (
-          <EmptyState icon={<WebhookIcon className="h-6 w-6" />} title="No webhooks yet." />
+          <EmptyState icon={<WebhookIcon className="h-6 w-6" />} title={t('webhooks.empty')} />
         ) : (
           <>
             <DataTable rows={webhooks} columns={columns} busy={refreshing} breakpoint="xl" />
@@ -481,7 +489,7 @@ function WebhookManager() {
               total={total}
               totalPages={totalPages}
               busy={refreshing}
-              itemLabel="webhooks"
+              itemLabel={t('webhooks.items')}
               onPageChange={setPage}
               onPageSizeChange={setPageSize}
             />

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { useI18n } from '@/lib/i18n';
 import api from '@/lib/api';
 import AuthShell from '@/components/AuthShell';
 import { Alert, Button, Field, Input } from '@/components/ui';
@@ -8,6 +9,7 @@ import { Alert, Button, Field, Input } from '@/components/ui';
 export default function ChangePassword() {
   const { mustChangePassword, completePasswordChange } = useAuth();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -19,12 +21,12 @@ export default function ChangePassword() {
     setError('');
 
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match.');
+      setError(t('password.mismatch'));
       return;
     }
 
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters.');
+      setError(t('password.tooShort'));
       return;
     }
 
@@ -37,7 +39,7 @@ export default function ChangePassword() {
       completePasswordChange(res.data.token);
       navigate('/');
     } catch {
-      setError('Failed to change password. Check your current password.');
+      setError(t('password.failed'));
     } finally {
       setLoading(false);
     }
@@ -45,16 +47,14 @@ export default function ChangePassword() {
 
   return (
     <AuthShell
-      title="Change Password"
+      title={t('password.title')}
       description={
-        mustChangePassword && (
-          <span className="text-warning">You must change your password before continuing.</span>
-        )
+        mustChangePassword && <span className="text-warning">{t('password.mustChange')}</span>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <Alert>{error}</Alert>}
-        <Field label="Current Password" htmlFor="currentPassword">
+        <Field label={t('password.current')} htmlFor="currentPassword">
           <Input
             id="currentPassword"
             type="password"
@@ -64,7 +64,7 @@ export default function ChangePassword() {
             autoComplete="current-password"
           />
         </Field>
-        <Field label="New Password" htmlFor="newPassword" hint="At least 8 characters.">
+        <Field label={t('password.new')} htmlFor="newPassword" hint={t('password.minHint')}>
           <Input
             id="newPassword"
             type="password"
@@ -75,7 +75,7 @@ export default function ChangePassword() {
             autoComplete="new-password"
           />
         </Field>
-        <Field label="Confirm New Password" htmlFor="confirmPassword">
+        <Field label={t('password.confirm')} htmlFor="confirmPassword">
           <Input
             id="confirmPassword"
             type="password"
@@ -87,7 +87,7 @@ export default function ChangePassword() {
           />
         </Field>
         <Button type="submit" loading={loading} className="w-full">
-          {loading ? 'Changing...' : 'Change Password'}
+          {loading ? t('password.submitting') : t('password.submit')}
         </Button>
       </form>
     </AuthShell>

@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { formatRelativeTime } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
+import type { MessageKey } from '@/locales/en';
+import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { useMessageStats } from '@/lib/messageActivity';
 import {
   chatPath,
@@ -49,6 +51,15 @@ const RECENT_LIMIT = 10;
 
 const MODEM_POLL_MS = 30000;
 
+const QUALITY_LABELS: Record<string, MessageKey> = {
+  excellent: 'quality.excellent',
+  good: 'quality.good',
+  fair: 'quality.fair',
+  poor: 'quality.poor',
+  none: 'quality.none',
+  unknown: 'quality.unknown',
+};
+
 function signalBars(quality: string): number {
   switch (quality) {
     case 'excellent':
@@ -68,6 +79,7 @@ function signalBars(quality: string): number {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [modemStatus, setModemStatus] = useState<ModemStatus | null>(null);
   const [modemSignal, setModemSignal] = useState<ModemSignal | null>(null);
   const [recentMessages, setRecentMessages] = useState<Message[]>([]);
@@ -129,39 +141,43 @@ export default function Dashboard() {
     try {
       const res = await api.post('/sms/send', { to, body });
       if (res.data.status === 'sent') {
-        setSendResult({ type: 'success', message: 'Message sent successfully.' });
+        setSendResult({ type: 'success', message: t('dashboard.sent') });
         setTo('');
         setBody('');
         notifyConversationsChanged();
       } else {
-        setSendResult({ type: 'error', message: res.data.message || 'Failed to send message.' });
+        setSendResult({ type: 'error', message: res.data.message || t('chat.sendFailed') });
       }
     } catch (err) {
       // A 400 carries the reason, e.g. a number not in international format.
       const reason = isAxiosError(err)
         ? (err.response?.data as { error?: string } | undefined)?.error
         : undefined;
-      setSendResult({ type: 'error', message: reason || 'Failed to send message.' });
+      setSendResult({ type: 'error', message: reason || t('chat.sendFailed') });
     } finally {
       setSending(false);
     }
   };
 
   if (loading) {
-    return <LoadingState label="Loading dashboard..." />;
+    return <LoadingState label={t('dashboard.loading')} />;
   }
 
   const modemOk = modemStatus?.status === 'ok';
+  const qualityLabel = (quality: string) => {
+    const key = QUALITY_LABELS[quality];
+    return key ? t(key) : quality;
+  };
   const bars = modemSignal ? signalBars(modemSignal.quality) : 0;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" description="Modem health and message activity at a glance." />
+      <PageHeader title={t('nav.dashboard')} description={t('dashboard.description')} />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
-          label="Modem"
+          label={t('dashboard.modem')}
           icon={
             modemOk ? <CheckCircleIcon className="h-5 w-5" /> : <AlertIcon className="h-5 w-5" />
           }
@@ -180,12 +196,16 @@ export default function Dashboard() {
               />
             </span>
             <span className={modemOk ? 'text-success' : 'text-danger'}>
-              {modemOk ? 'Online' : 'Offline'}
+              {modemOk ? t('dashboard.online') : t('dashboard.offline')}
             </span>
           </span>
         </StatCard>
 
-        <StatCard label="Signal" icon={<SignalIcon className="h-5 w-5" />} tone="primary">
+        <StatCard
+          label={t('dashboard.signal')}
+          icon={<SignalIcon className="h-5 w-5" />}
+          tone="primary"
+        >
           <span className="flex items-end gap-2">
             <span className="flex items-end gap-0.5" aria-hidden="true">
               {[1, 2, 3, 4, 5].map((level) => (
@@ -199,32 +219,42 @@ export default function Dashboard() {
                 />
               ))}
             </span>
-            <span className="text-sm font-medium text-fg-muted capitalize">
-              {modemSignal ? modemSignal.quality : 'unknown'}
+            <span className="text-sm font-medium text-fg-muted first-letter:uppercase">
+              {qualityLabel(modemSignal?.quality ?? 'unknown')}
               {modemSignal && modemSignal.quality !== 'unknown' ? ` (${modemSignal.signal})` : ''}
             </span>
           </span>
         </StatCard>
 
-        <StatCard label="Total Sent" icon={<OutboxIcon className="h-5 w-5" />} tone="primary">
-          {totalSent.toLocaleString()}
+        <StatCard
+          label={t('dashboard.totalSent')}
+          icon={<OutboxIcon className="h-5 w-5" />}
+          tone="primary"
+        >
+          {formatNumber(totalSent)}
         </StatCard>
 
-        <StatCard label="Total Received" icon={<InboxIcon className="h-5 w-5" />} tone="primary">
-          {totalReceived.toLocaleString()}
+        <StatCard
+          label={t('dashboard.totalReceived')}
+          icon={<InboxIcon className="h-5 w-5" />}
+          tone="primary"
+        >
+          {formatNumber(totalReceived)}
         </StatCard>
       </div>
 
       {pendingCount > 0 && (
         <Alert tone="warning">
-          {pendingCount} message{pendingCount !== 1 ? 's' : ''} pending delivery.
+          {t(pendingCount === 1 ? 'dashboard.pending.one' : 'dashboard.pending.other', {
+            count: formatNumber(pendingCount),
+          })}
         </Alert>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Quick Send */}
         <Card className="self-start">
-          <CardHeader title="Quick Send" />
+          <CardHeader title={t('dashboard.quickSend')} />
           <CardBody>
             <form onSubmit={handleQuickSend} className="space-y-4">
               {sendResult && (
@@ -234,18 +264,18 @@ export default function Dashboard() {
               )}
               <div>
                 <label htmlFor="quickTo" className="mb-1.5 block text-sm font-medium text-fg">
-                  Phone Number
+                  {t('dashboard.phoneNumber')}
                 </label>
                 <PhoneInput id="quickTo" value={to} onChange={setTo} required />
               </div>
-              <Field label="Message" htmlFor="quickBody">
+              <Field label={t('common.message')} htmlFor="quickBody">
                 <Textarea
                   id="quickBody"
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   required
                   rows={3}
-                  placeholder="Type your message..."
+                  placeholder={t('dashboard.placeholder')}
                 />
               </Field>
               <Button
@@ -254,7 +284,7 @@ export default function Dashboard() {
                 icon={<SendIcon className="h-4 w-4" />}
                 className="w-full"
               >
-                {sending ? 'Sending...' : 'Send SMS'}
+                {sending ? t('common.sending') : t('dashboard.send')}
               </Button>
             </form>
           </CardBody>
@@ -262,9 +292,12 @@ export default function Dashboard() {
 
         {/* Recent Messages */}
         <Card className="lg:col-span-2">
-          <CardHeader title="Recent Messages" />
+          <CardHeader title={t('dashboard.recent')} />
           {recentMessages.length === 0 ? (
-            <EmptyState icon={<MessageIcon className="h-6 w-6" />} title="No messages yet" />
+            <EmptyState
+              icon={<MessageIcon className="h-6 w-6" />}
+              title={t('dashboard.noMessages')}
+            />
           ) : (
             <ul className="divide-y divide-border">
               {recentMessages.map((msg) => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
+import { t } from '@/lib/i18n';
 import {
   compareMessages,
   notifyConversationsChanged,
@@ -44,7 +45,7 @@ export function useConversations(search: string) {
       setTotal(header !== undefined ? Number(header) : res.data.length);
       setError('');
     } catch {
-      if (seq === requestSeq.current) setError('Failed to load conversations.');
+      if (seq === requestSeq.current) setError(t('chat.loadConversationsFailed'));
     } finally {
       if (seq === requestSeq.current) {
         setLoading(false);
@@ -163,7 +164,7 @@ export function useThread(phone: string) {
       }
       return res.data;
     } catch {
-      if (phoneRef.current === phone) setError('Failed to load messages.');
+      if (phoneRef.current === phone) setError(t('chat.loadMessagesFailed'));
     }
   }, [phone, markRead]);
 
@@ -208,7 +209,7 @@ export function useThread(phone: string) {
       setMessages((prev) => mergeMessages(prev, res.data));
       setHasOlder(res.data.length === THREAD_PAGE);
     } catch {
-      setError('Failed to load older messages.');
+      setError(t('chat.loadOlderFailed'));
     } finally {
       setLoadingOlder(false);
     }
@@ -252,7 +253,7 @@ export function useThread(phone: string) {
         // was never stored, so the reason only exists here.
         const reason =
           (isAxiosError(err) && (err.response?.data as { error?: string } | undefined)?.error) ||
-          'Could not reach the server.';
+          t('chat.unreachable');
         setMessages((prev) =>
           prev.map((m) =>
             m.id === temp.id ? { ...m, status: 'failed', error_message: reason } : m,

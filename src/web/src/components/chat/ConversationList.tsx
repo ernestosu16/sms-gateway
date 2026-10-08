@@ -1,7 +1,8 @@
 import type { ComponentRef, UIEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/cn';
-import { formatListTime } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
+import { formatListTime, formatNumber } from '@/lib/format';
 import { chatPath, type Conversation } from '@/lib/messages';
 import { describePhone } from '@/lib/phone';
 import Avatar from '@/components/chat/Avatar';
@@ -33,17 +34,18 @@ interface ConversationListProps {
 const LOAD_MORE_PX = 200;
 
 function Preview({ message }: { message: Conversation['last_message'] }) {
+  const { t } = useI18n();
   if (message.direction === 'outbound' && message.status === 'failed') {
     return (
       <span className="flex min-w-0 items-center gap-1 text-danger">
         <AlertIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">Not sent: {message.body}</span>
+        <span className="truncate">{t('chat.notSentPreview', { body: message.body })}</span>
       </span>
     );
   }
   return (
     <span className="truncate">
-      {message.direction === 'outbound' && <span className="text-fg-subtle">You: </span>}
+      {message.direction === 'outbound' && <span className="text-fg-subtle">{t('chat.you')}</span>}
       {message.body}
     </span>
   );
@@ -61,6 +63,7 @@ export default function ConversationList({
   onSearchChange,
   onLoadMore,
 }: ConversationListProps) {
+  const { t } = useI18n();
   const handleScroll = (e: UIEvent<ComponentRef<'div'>>) => {
     const el = e.currentTarget;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < LOAD_MORE_PX) onLoadMore();
@@ -71,28 +74,28 @@ export default function ConversationList({
       <div className="shrink-0 space-y-3 border-b border-border px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-baseline gap-2">
-            <h1 className="text-lg font-semibold tracking-tight text-fg">Messages</h1>
-            {total > 0 && <span className="text-xs text-fg-subtle">{total.toLocaleString()}</span>}
+            <h1 className="text-lg font-semibold tracking-tight text-fg">{t('nav.messages')}</h1>
+            {total > 0 && <span className="text-xs text-fg-subtle">{formatNumber(total)}</span>}
           </div>
           <Link
             to="/chats/new"
             className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-fg shadow-sm transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none"
           >
             <PlusIcon className="h-4 w-4" />
-            New message
+            {t('chat.newMessage')}
           </Link>
         </div>
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
           <label htmlFor="conversation-search" className="sr-only">
-            Search conversations
+            {t('chat.search')}
           </label>
           <input
             id="conversation-search"
             type="search"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search names, numbers or messages"
+            placeholder={t('chat.searchPlaceholder')}
             className="block h-9 w-full rounded-lg border border-border-strong bg-field pr-3 pl-9 text-sm text-fg placeholder:text-fg-subtle focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
           />
         </div>
@@ -102,12 +105,12 @@ export default function ConversationList({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" onScroll={handleScroll}>
         {loading ? (
-          <LoadingState label="Loading conversations…" />
+          <LoadingState label={t('chat.loadingConversations')} />
         ) : items.length === 0 ? (
           <EmptyState
             icon={<MessageIcon className="h-6 w-6" />}
-            title={search ? 'No matching conversations' : 'No conversations yet'}
-            description={search ? undefined : 'Received and sent messages will show up here.'}
+            title={search ? t('chat.noMatches') : t('chat.noConversations')}
+            description={search ? undefined : t('chat.noConversationsHint')}
           />
         ) : (
           <ul className="divide-y divide-border">
@@ -157,7 +160,7 @@ export default function ConversationList({
                         {unread && (
                           <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-fg">
                             {c.unread_count}
-                            <span className="sr-only"> unread</span>
+                            <span className="sr-only"> {t('common.unread')}</span>
                           </span>
                         )}
                       </div>
@@ -172,7 +175,7 @@ export default function ConversationList({
         {hasMore && !loading && (
           <div className="flex justify-center py-3">
             <Button variant="ghost" size="sm" onClick={onLoadMore} loading={loadingMore}>
-              Load more
+              {t('chat.loadMore')}
             </Button>
           </div>
         )}

@@ -55,9 +55,6 @@ export function isDialable(phone: string): boolean {
   return /^(\+[1-9]\d{6,14}|\d{3,6})$/.test(phone);
 }
 
-export const RECIPIENT_FORMAT_HINT =
-  'Use the international format with + and country code, e.g. +15551234567 (or a 3–6 digit short code).';
-
 /** The server rejects longer bodies (modem.maxBodyRunes: 6 concatenated parts). */
 export const MAX_BODY_CHARS = 918;
 

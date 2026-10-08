@@ -2,8 +2,12 @@ import { Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
+import { formatNumber } from '@/lib/format';
+import type { MessageKey } from '@/locales/en';
 import { useMessageStats } from '@/lib/messageActivity';
 import { useResizablePanel } from '@/lib/useResizablePanel';
+import LanguageControl from '@/components/LanguageControl';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import {
   ContactIcon,
@@ -21,38 +25,41 @@ import {
   XIcon,
 } from '@/components/ui';
 
-const navSections = [
+const navSections: {
+  title: MessageKey;
+  items: { to: string; label: MessageKey; Icon: typeof DashboardIcon }[];
+}[] = [
   {
-    title: 'Messaging',
+    title: 'nav.messaging',
     items: [
-      { to: '/', label: 'Dashboard', Icon: DashboardIcon },
-      { to: '/chats', label: 'Messages', Icon: MessageIcon },
-      { to: '/contacts', label: 'Contacts', Icon: ContactIcon },
+      { to: '/', label: 'nav.dashboard', Icon: DashboardIcon },
+      { to: '/chats', label: 'nav.messages', Icon: MessageIcon },
+      { to: '/contacts', label: 'nav.contacts', Icon: ContactIcon },
     ],
   },
   {
-    title: 'Settings',
+    title: 'nav.settings',
     items: [
-      { to: '/apikeys', label: 'API Keys', Icon: KeyIcon },
-      { to: '/webhooks', label: 'Webhooks', Icon: WebhookIcon },
-      { to: '/users', label: 'Users', Icon: UsersIcon },
-      { to: '/modem', label: 'Modem Test', Icon: SignalIcon },
+      { to: '/apikeys', label: 'nav.apiKeys', Icon: KeyIcon },
+      { to: '/webhooks', label: 'nav.webhooks', Icon: WebhookIcon },
+      { to: '/users', label: 'nav.users', Icon: UsersIcon },
+      { to: '/modem', label: 'nav.modemTest', Icon: SignalIcon },
     ],
   },
 ];
 
 /** Section name for the compact mobile header. */
-function sectionTitle(pathname: string): string {
-  if (pathname.startsWith('/chats') || pathname.startsWith('/messages/')) return 'Messages';
+function sectionTitle(pathname: string): MessageKey {
+  if (pathname.startsWith('/chats') || pathname.startsWith('/messages/')) return 'nav.messages';
   for (const section of navSections) {
     const item = section.items.find((i) => i.to === pathname);
     if (item) return item.label;
   }
-  return 'SMS Gateway';
+  return 'common.appName';
 }
 
 function formatUnread(unread: number): string {
-  return unread > 99 ? '99+' : String(unread);
+  return unread > 99 ? `${formatNumber(99)}+` : formatNumber(unread);
 }
 
 function Brand() {
@@ -70,6 +77,7 @@ function Brand() {
 
 export default function Layout() {
   const { logout, user } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -136,16 +144,16 @@ export default function Layout() {
           <button
             className="hidden rounded-md p-1.5 text-sidebar-fg hover:bg-sidebar-active hover:text-sidebar-active-fg lg:block"
             onClick={sidebar.toggle}
-            aria-label={rail ? 'Expand navigation' : 'Collapse navigation'}
+            aria-label={rail ? t('nav.expand') : t('nav.collapse')}
             aria-expanded={!rail}
-            title={rail ? 'Expand navigation' : 'Collapse navigation'}
+            title={rail ? t('nav.expand') : t('nav.collapse')}
           >
             <SidebarIcon className="h-[18px] w-[18px]" />
           </button>
           <button
             className="rounded-md p-1.5 text-sidebar-fg hover:bg-sidebar-active hover:text-sidebar-active-fg lg:hidden"
             onClick={() => setSidebarOpen(false)}
-            aria-label="Close navigation"
+            aria-label={t('nav.close')}
           >
             <XIcon />
           </button>
@@ -156,7 +164,7 @@ export default function Layout() {
             'flex-1 space-y-6 overflow-x-hidden overflow-y-auto px-3 py-5',
             rail && 'lg:px-2',
           )}
-          aria-label="Main"
+          aria-label={t('nav.main')}
         >
           {navSections.map((section, index) => (
             <div key={section.title}>
@@ -166,7 +174,7 @@ export default function Layout() {
                   rail && 'lg:hidden',
                 )}
               >
-                {section.title}
+                {t(section.title)}
               </p>
               {rail && index > 0 && (
                 <div
@@ -181,7 +189,7 @@ export default function Layout() {
                     to={to}
                     end={to === '/'}
                     onClick={() => setSidebarOpen(false)}
-                    title={rail ? label : undefined}
+                    title={rail ? t(label) : undefined}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -202,7 +210,7 @@ export default function Layout() {
                         />
                       )}
                     </span>
-                    <span className={cn('flex-1 truncate', rail && 'lg:sr-only')}>{label}</span>
+                    <span className={cn('flex-1 truncate', rail && 'lg:sr-only')}>{t(label)}</span>
                     {to === '/chats' && unread > 0 && (
                       <span
                         className={cn(
@@ -211,7 +219,7 @@ export default function Layout() {
                         )}
                       >
                         {formatUnread(unread)}
-                        <span className="sr-only"> unread</span>
+                        <span className="sr-only"> {t('common.unread')}</span>
                       </span>
                     )}
                   </NavLink>
@@ -227,6 +235,12 @@ export default function Layout() {
             rail && 'lg:flex lg:flex-col lg:items-center lg:px-2',
           )}
         >
+          <LanguageControl
+            className={cn(
+              'flex w-full border-sidebar-border bg-sidebar-active/40',
+              rail && 'lg:w-auto lg:flex-col',
+            )}
+          />
           <ThemeModeControl
             className={cn(
               'flex w-full border-sidebar-border bg-sidebar-active/40',
@@ -245,13 +259,15 @@ export default function Layout() {
                 <p className="truncate text-sm font-medium text-sidebar-active-fg">
                   {user.username}
                 </p>
-                <p className="text-xs opacity-70">{user.is_admin ? 'Administrator' : 'User'}</p>
+                <p className="text-xs opacity-70">
+                  {user.is_admin ? t('common.administrator') : t('common.user')}
+                </p>
               </div>
               <button
                 onClick={handleLogout}
                 className="rounded-md p-2 hover:bg-sidebar-active hover:text-sidebar-active-fg"
-                aria-label="Log out"
-                title="Log out"
+                aria-label={t('nav.logout')}
+                title={t('nav.logout')}
               >
                 <LogoutIcon className="h-[18px] w-[18px]" />
               </button>
@@ -261,7 +277,7 @@ export default function Layout() {
 
         {/* Drag to resize, past the minimum to collapse, double-click to reset. */}
         <ResizeHandle
-          label="Resize navigation"
+          label={t('nav.resize')}
           dragging={sidebar.dragging}
           {...sidebar.handleProps}
           className="hidden lg:block"
@@ -275,7 +291,7 @@ export default function Layout() {
           <button
             className="relative -ml-1.5 rounded-md p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg"
             onClick={() => setSidebarOpen(true)}
-            aria-label={unread > 0 ? `Open navigation, ${unread} unread` : 'Open navigation'}
+            aria-label={unread > 0 ? t('nav.openUnread', { count: unread }) : t('nav.open')}
           >
             <MenuIcon />
             {/* The sidebar badge is hidden in the closed drawer, so phones show it here. */}
@@ -288,19 +304,21 @@ export default function Layout() {
               </span>
             )}
           </button>
-          <span className="truncate text-base font-semibold text-fg">{sectionTitle(pathname)}</span>
+          <span className="truncate text-base font-semibold text-fg">
+            {t(sectionTitle(pathname))}
+          </span>
         </header>
 
         {fullBleed ? (
           <main className="min-h-0 flex-1 overflow-hidden">
-            <Suspense fallback={<LoadingState label="Loading…" />}>
+            <Suspense fallback={<LoadingState label={t('common.loading')} />}>
               <Outlet />
             </Suspense>
           </main>
         ) : (
           <main className="flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-              <Suspense fallback={<LoadingState label="Loading…" />}>
+              <Suspense fallback={<LoadingState label={t('common.loading')} />}>
                 <Outlet />
               </Suspense>
             </div>

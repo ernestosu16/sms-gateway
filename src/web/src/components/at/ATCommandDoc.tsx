@@ -5,20 +5,23 @@ import {
   type ATFormKind,
   type ATRisk,
 } from '@/lib/at';
+import { useI18n } from '@/lib/i18n';
+import type { MessageKey } from '@/locales/en';
 import { Alert, Badge, InfoIcon, type Tone } from '@/components/ui';
 
-const RISK_BADGE: Record<ATRisk, { tone: Tone; label: string }> = {
-  safe: { tone: 'success', label: 'Read only' },
-  config: { tone: 'primary', label: 'Changes settings' },
-  dangerous: { tone: 'danger', label: 'Dangerous' },
-  unknown: { tone: 'warning', label: 'Unknown' },
+const RISK_BADGE: Record<ATRisk, { tone: Tone; label: MessageKey }> = {
+  safe: { tone: 'success', label: 'at.risk.safe' },
+  config: { tone: 'primary', label: 'at.risk.config' },
+  dangerous: { tone: 'danger', label: 'at.risk.dangerous' },
+  unknown: { tone: 'warning', label: 'at.risk.unknown' },
 };
 
 export function RiskBadge({ risk }: { risk: ATRisk }) {
+  const { t } = useI18n();
   const { tone, label } = RISK_BADGE[risk];
   return (
     <Badge tone={tone} dot>
-      {label}
+      {t(label)}
     </Badge>
   );
 }
@@ -45,6 +48,7 @@ export default function ATCommandDoc({
   onInsert,
   onParam,
 }: ATCommandDocProps) {
+  const { t } = useI18n();
   const setForm = info.forms.find((f) => f.kind === 'set');
   const placeholders = setForm ? [...setForm.syntax.matchAll(/<([^>]+)>/g)].map((m) => m[1]) : [];
   // Warnings only matter for the forms that act, not for reads and tests.
@@ -57,7 +61,7 @@ export default function ATCommandDoc({
         <span className="text-sm font-medium text-fg">{info.title}</span>
         <Badge>{info.category}</Badge>
         <RiskBadge risk={risk} />
-        {supported === false && <Badge tone="warning">Not reported by this modem</Badge>}
+        {supported === false && <Badge tone="warning">{t('at.notReported')}</Badge>}
       </div>
 
       <p className="text-sm text-fg-muted">{info.description}</p>
@@ -68,7 +72,7 @@ export default function ATCommandDoc({
 
       <section>
         <h4 className="mb-1.5 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
-          Syntax
+          {t('at.syntax')}
         </h4>
         <ul className="divide-y divide-border rounded-md border border-border bg-surface">
           {info.forms.map((form) => (
@@ -77,7 +81,7 @@ export default function ATCommandDoc({
                 type="button"
                 onClick={() => onInsert(insertTextFor(form.syntax))}
                 className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-surface-hover sm:flex-row sm:items-baseline sm:gap-4"
-                title="Insert into the command field"
+                title={t('at.insert')}
               >
                 <code className="font-mono text-xs break-all text-primary sm:w-64 sm:shrink-0">
                   {form.syntax}
@@ -92,7 +96,7 @@ export default function ATCommandDoc({
       {info.params && info.params.length > 0 && (
         <section>
           <h4 className="mb-1.5 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
-            Parameters
+            {t('at.parameters')}
           </h4>
           <dl className="space-y-2.5">
             {info.params.map((param) => {
@@ -113,7 +117,7 @@ export default function ATCommandDoc({
                             type="button"
                             onClick={() => onParam(prefix, position, v.value)}
                             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs transition-colors hover:border-primary hover:bg-primary-soft/40"
-                            title={`Use ${v.value}`}
+                            title={t('at.use', { value: v.value })}
                           >
                             <code className="font-mono font-semibold text-primary">{v.value}</code>
                             <span className="text-fg-muted">{v.description}</span>
@@ -140,13 +144,13 @@ export default function ATCommandDoc({
       <div className="flex flex-col gap-2 text-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
         {info.response && (
           <span className="min-w-0">
-            <span className="text-fg-subtle">Response </span>
+            <span className="text-fg-subtle">{t('at.response')} </span>
             <code className="font-mono break-all whitespace-pre-wrap text-fg">{info.response}</code>
           </span>
         )}
         {info.example && (
           <span>
-            <span className="text-fg-subtle">Example </span>
+            <span className="text-fg-subtle">{t('at.example')} </span>
             <button
               type="button"
               onClick={() => onInsert(info.example!)}
@@ -164,19 +168,17 @@ export default function ATCommandDoc({
 
 /** Shown when the typed command is not in the catalog. */
 export function UnknownCommandDoc({ command, reported }: { command: string; reported: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-2 rounded-lg border border-border bg-surface-muted p-4">
       <div className="flex flex-wrap items-center gap-2">
         <code className="font-mono text-sm font-semibold break-all text-fg">{command}</code>
         <RiskBadge risk="unknown" />
-        {reported && <Badge tone="primary">Reported by this modem</Badge>}
+        {reported && <Badge tone="primary">{t('at.reported')}</Badge>}
       </div>
       <p className="flex gap-2 text-sm text-fg-muted">
         <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" />
-        {reported
-          ? 'This modem lists the command, but it is not documented here.'
-          : 'This command is not in the reference, so its effect is unknown.'}{' '}
-        You will be asked to confirm before it is sent.
+        {reported ? t('at.unknownReported') : t('at.unknownCommand')} {t('at.confirmNotice')}
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
 import { Button } from './Button';
 import { AlertIcon } from './icons';
 
@@ -50,11 +51,12 @@ interface ConfirmDialogProps extends ConfirmOptions {
 function ConfirmDialog({
   title,
   description,
-  confirmLabel = 'Confirm',
+  confirmLabel,
   tone = 'danger',
   onSettle,
 }: ConfirmDialogProps) {
   const ref = useRef<ComponentRef<'dialog'>>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     ref.current?.showModal();
@@ -97,10 +99,10 @@ function ConfirmDialog({
       </div>
       <div className="flex flex-col-reverse gap-2 border-t border-border bg-surface-muted px-5 py-3 sm:flex-row sm:justify-end sm:px-6">
         <Button variant="secondary" onClick={() => onSettle(false)} autoFocus>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={() => onSettle(true)}>
-          {confirmLabel}
+          {confirmLabel ?? t('common.confirm')}
         </Button>
       </div>
     </dialog>

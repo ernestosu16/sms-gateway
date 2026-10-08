@@ -2,16 +2,16 @@ import { useEffect, useMemo, useRef, useState, type ComponentRef, type FormEvent
 import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import {
   chatPath,
   isDialable,
   MAX_CONTACT_NAME,
   notifyConversationsChanged,
-  RECIPIENT_FORMAT_HINT,
   type Contact,
 } from '@/lib/messages';
 import { describePhone } from '@/lib/phone';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatNumber } from '@/lib/format';
 import { usePaginatedList } from '@/lib/usePaginatedList';
 import Avatar from '@/components/chat/Avatar';
 import Pagination from '@/components/Pagination';
@@ -60,6 +60,7 @@ async function findContact(phone: string): Promise<Contact | undefined> {
 }
 
 export default function Contacts() {
+  const { t } = useI18n();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   useEffect(() => {
@@ -141,7 +142,7 @@ export default function Contacts() {
     if (!trimmed) return;
     // PhoneInput already keeps the value as "+" and digits only.
     if (!editing && !isDialable(phone)) {
-      setPhoneError(RECIPIENT_FORMAT_HINT);
+      setPhoneError(t('phone.formatHint'));
       return;
     }
 
@@ -154,22 +155,24 @@ export default function Contacts() {
         const existing = await findContact(phone);
         if (existing) {
           const confirmed = await confirm({
-            title: `Rename "${existing.name}"?`,
-            description: `${describePhone(phone).formatted} is already saved as "${existing.name}". Saving replaces that name with "${trimmed}".`,
-            confirmLabel: 'Rename',
+            title: t('contacts.renameTitle', { name: existing.name }),
+            description: t('contacts.renameBody', {
+              phone: describePhone(phone).formatted,
+              name: existing.name,
+              newName: trimmed,
+            }),
+            confirmLabel: t('contacts.rename'),
           });
           if (!confirmed) return;
         }
       }
       const res = await api.put<Contact>('/contacts', { name: trimmed }, { params: { phone } });
-      setSuccess(
-        editing ? `Contact "${res.data.name}" updated.` : `Contact "${res.data.name}" saved.`,
-      );
+      setSuccess(t(editing ? 'contacts.updated' : 'contacts.saved', { name: res.data.name }));
       closeForm();
       refresh();
       notifyConversationsChanged();
     } catch (err) {
-      setActionError(errorMessage(err, 'Failed to save contact.'));
+      setActionError(errorMessage(err, t('contacts.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -177,10 +180,9 @@ export default function Contacts() {
 
   const handleDelete = async (contact: Contact) => {
     const confirmed = await confirm({
-      title: `Delete "${contact.name}"?`,
-      description:
-        'The number shows without a name from now on. Its messages are kept. This cannot be undone.',
-      confirmLabel: 'Delete',
+      title: t('contacts.deleteTitle', { name: contact.name }),
+      description: t('contacts.deleteBody'),
+      confirmLabel: t('common.delete'),
     });
     if (!confirmed) return;
     clearMessages();
@@ -195,14 +197,14 @@ export default function Contacts() {
         refresh();
         return;
       }
-      setActionError(errorMessage(err, 'Failed to delete contact.'));
+      setActionError(errorMessage(err, t('contacts.deleteFailed')));
     }
   };
 
   const columns: Column<ContactRow>[] = [
     {
       key: 'name',
-      header: 'Name',
+      header: t('common.name'),
       mobile: 'title',
       cell: (c) => (
         <div className="flex min-w-0 items-center gap-3">
@@ -213,7 +215,7 @@ export default function Contacts() {
     },
     {
       key: 'phone',
-      header: 'Number',
+      header: t('common.number'),
       mobile: 'body',
       cell: (c) => {
         const details = describePhone(c.phone_number);
@@ -229,13 +231,13 @@ export default function Contacts() {
     },
     {
       key: 'updated',
-      header: 'Updated',
+      header: t('contacts.updatedColumn'),
       className: 'text-fg-muted whitespace-nowrap',
       cell: (c) => formatDate(c.updated_at),
     },
     {
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="sr-only">{t('common.actions')}</span>,
       mobile: 'footer',
       cell: (c) => (
         <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end">
@@ -244,13 +246,13 @@ export default function Contacts() {
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 text-xs font-medium text-fg shadow-sm transition-colors hover:bg-surface-hover"
           >
             <MessageIcon className="h-3.5 w-3.5" />
-            Message
+            {t('common.message')}
           </Link>
           <Button variant="secondary" size="sm" onClick={() => startEdit(c)}>
-            Edit
+            {t('common.edit')}
           </Button>
           <Button variant="danger-soft" size="sm" onClick={() => handleDelete(c)}>
-            Delete
+            {t('common.delete')}
           </Button>
         </div>
       ),
@@ -260,13 +262,13 @@ export default function Contacts() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Contacts"
-        meta={total > 0 ? total.toLocaleString() : undefined}
-        description="Names shown in place of phone numbers across your conversations. Deleting a contact keeps its messages."
+        title={t('nav.contacts')}
+        meta={total > 0 ? formatNumber(total) : undefined}
+        description={t('contacts.description')}
         actions={
           !formOpen && (
             <Button icon={<PlusIcon className="h-4 w-4" />} onClick={startCreate}>
-              New contact
+              {t('contacts.new')}
             </Button>
           )
         }
@@ -277,12 +279,14 @@ export default function Contacts() {
 
       {formOpen && (
         <Card>
-          <CardHeader title={editing ? `Edit "${editing.name}"` : 'New contact'} />
+          <CardHeader
+            title={editing ? t('contacts.edit', { name: editing.name }) : t('contacts.new')}
+          />
           <CardBody>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 {editing ? (
-                  <Field label="Number" htmlFor="contactPhone">
+                  <Field label={t('common.number')} htmlFor="contactPhone">
                     <Input
                       id="contactPhone"
                       value={describePhone(editing.phone_number).formatted}
@@ -290,7 +294,11 @@ export default function Contacts() {
                     />
                   </Field>
                 ) : (
-                  <Field label="Number" htmlFor="contactPhone" error={phoneError || undefined}>
+                  <Field
+                    label={t('common.number')}
+                    htmlFor="contactPhone"
+                    error={phoneError || undefined}
+                  >
                     <PhoneInput
                       id="contactPhone"
                       value={phone}
@@ -304,7 +312,7 @@ export default function Contacts() {
                     />
                   </Field>
                 )}
-                <Field label="Name" htmlFor="contactName">
+                <Field label={t('common.name')} htmlFor="contactName">
                   <Input
                     id="contactName"
                     ref={nameRef}
@@ -313,7 +321,7 @@ export default function Contacts() {
                     onChange={(e) => setName(e.target.value)}
                     required
                     maxLength={MAX_CONTACT_NAME}
-                    placeholder="e.g. Jane Doe"
+                    placeholder={t('contacts.namePlaceholder')}
                     autoComplete="off"
                   />
                 </Field>
@@ -321,10 +329,14 @@ export default function Contacts() {
 
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button variant="secondary" onClick={closeForm}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" disabled={!name.trim()} loading={saving}>
-                  {saving ? 'Saving...' : editing ? 'Save Changes' : 'Save Contact'}
+                  {saving
+                    ? t('common.saving')
+                    : editing
+                      ? t('common.saveChanges')
+                      : t('contacts.save')}
                 </Button>
               </div>
             </form>
@@ -335,7 +347,7 @@ export default function Contacts() {
       <Card className="overflow-hidden">
         <div className="border-b border-border px-4 py-3">
           <label htmlFor="contactSearch" className="sr-only">
-            Search contacts
+            {t('contacts.search')}
           </label>
           <div className="relative sm:max-w-sm">
             <SearchIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
@@ -344,18 +356,18 @@ export default function Contacts() {
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by name or number"
+              placeholder={t('contacts.searchPlaceholder')}
               className="pl-9"
             />
           </div>
         </div>
 
         {loading ? (
-          <LoadingState label="Loading contacts..." />
+          <LoadingState label={t('contacts.loading')} />
         ) : rows.length === 0 ? (
           <EmptyState
             icon={<ContactIcon className="h-6 w-6" />}
-            title={search ? 'No contacts match your search.' : 'No contacts yet.'}
+            title={search ? t('contacts.noMatches') : t('contacts.empty')}
           />
         ) : (
           <>
@@ -366,7 +378,7 @@ export default function Contacts() {
               total={total}
               totalPages={totalPages}
               busy={refreshing}
-              itemLabel="contacts"
+              itemLabel={t('contacts.items')}
               onPageChange={setPage}
               onPageSizeChange={setPageSize}
             />

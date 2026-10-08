@@ -1,3 +1,5 @@
+import { formatNumber } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 import { PAGE_SIZE_OPTIONS } from '@/lib/usePaginatedList';
 import { Button, Select } from '@/components/ui';
 
@@ -25,10 +27,11 @@ export default function Pagination({
   total,
   totalPages,
   busy = false,
-  itemLabel = 'items',
+  itemLabel,
   onPageChange,
   onPageSizeChange,
 }: PaginationProps) {
+  const { t } = useI18n();
   if (total <= PAGE_SIZE_OPTIONS[0] && totalPages <= 1) return null;
 
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -38,7 +41,11 @@ export default function Pagination({
     <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-fg-muted sm:justify-start">
         <span>
-          {first.toLocaleString()}&ndash;{last.toLocaleString()} of {total.toLocaleString()}
+          {t('pagination.range', {
+            first: formatNumber(first),
+            last: formatNumber(last),
+            total: formatNumber(total),
+          })}
         </span>
         {/*
           `relative` is load-bearing: sr-only is position:absolute, and without a
@@ -48,11 +55,13 @@ export default function Pagination({
           page to that height — leaving a tall blank area below the layout.
         */}
         <label className="relative flex items-center gap-2">
-          <span className="sr-only">{itemLabel} per page</span>
+          <span className="sr-only">
+            {t('pagination.perPageLabel', { items: itemLabel ?? t('pagination.items') })}
+          </span>
           <Select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))}>
             {PAGE_SIZE_OPTIONS.map((size) => (
               <option key={size} value={size}>
-                {size} per page
+                {t('pagination.perPage', { size })}
               </option>
             ))}
           </Select>
@@ -66,10 +75,10 @@ export default function Pagination({
           variant="secondary"
           size="sm"
         >
-          Previous
+          {t('pagination.previous')}
         </Button>
         <span className="text-sm whitespace-nowrap text-fg-muted" aria-live="polite">
-          Page {page.toLocaleString()} of {totalPages.toLocaleString()}
+          {t('pagination.page', { page: formatNumber(page), pages: formatNumber(totalPages) })}
         </span>
         <Button
           onClick={() => onPageChange(page + 1)}
@@ -77,7 +86,7 @@ export default function Pagination({
           variant="secondary"
           size="sm"
         >
-          Next
+          {t('pagination.next')}
         </Button>
       </div>
     </div>

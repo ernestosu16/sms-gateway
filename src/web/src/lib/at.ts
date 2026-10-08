@@ -6,6 +6,9 @@
  * command and has the final say.
  */
 
+import { t } from '@/lib/i18n';
+import type { MessageKey } from '@/locales/en';
+
 export type ATRisk = 'safe' | 'config' | 'dangerous' | 'unknown';
 export type ATFormKind = 'execute' | 'read' | 'test' | 'set';
 
@@ -44,9 +47,9 @@ export interface ATCatalog {
 /** Same rules as ValidateATCommand on the server. */
 export function validateAT(cmd: string): string | null {
   if (cmd === '') return null;
-  if (cmd.length > 256) return 'Commands are limited to 256 characters.';
-  if (!/^[\x20-\x7e]*$/.test(cmd)) return 'Only printable ASCII characters are allowed.';
-  if (!/^at/i.test(cmd)) return 'Commands must start with AT.';
+  if (cmd.length > 256) return t('at.error.length');
+  if (!/^[\x20-\x7e]*$/.test(cmd)) return t('at.error.ascii');
+  if (!/^at/i.test(cmd)) return t('at.error.prefix');
   return null;
 }
 
@@ -151,7 +154,7 @@ export function buildSuggestions(catalog: ATCatalog): Suggestion[] {
       key: `clac:${name}`,
       syntax: `AT${name}`,
       insert: `AT${name}`,
-      description: 'Reported by this modem, not documented here',
+      description: t('at.reportedSuggestion'),
     });
   }
   return suggestions;
@@ -180,13 +183,13 @@ export function matchSuggestions(all: Suggestion[], input: string, limit = 8): S
 
 // --- Response decoding ---
 
-const REG_STATUS: Record<string, string> = {
-  '0': 'not registered, not searching',
-  '1': 'registered on the home network',
-  '2': 'not registered, searching',
-  '3': 'registration denied',
-  '4': 'unknown',
-  '5': 'registered, roaming',
+const REG_STATUS: Record<string, MessageKey> = {
+  '0': 'atNote.reg.0',
+  '1': 'atNote.reg.1',
+  '2': 'atNote.reg.2',
+  '3': 'atNote.reg.3',
+  '4': 'atNote.reg.4',
+  '5': 'atNote.reg.5',
 };
 
 const ACCESS_TECH: Record<string, string> = {
@@ -196,34 +199,46 @@ const ACCESS_TECH: Record<string, string> = {
   '7': '4G (LTE)',
 };
 
-const CME_ERRORS: Record<string, string> = {
-  '3': 'operation not allowed',
-  '4': 'operation not supported',
-  '10': 'SIM not inserted',
-  '11': 'SIM PIN required',
-  '12': 'SIM PUK required',
-  '13': 'SIM failure',
-  '14': 'SIM busy',
-  '15': 'SIM wrong',
-  '16': 'incorrect password',
-  '30': 'no network service',
-  '31': 'network timeout',
-  '100': 'unknown error',
+const CME_ERRORS: Record<string, MessageKey> = {
+  '3': 'atNote.err.notAllowed',
+  '4': 'atNote.err.notSupported',
+  '10': 'atNote.err.simNotInserted',
+  '11': 'atNote.err.simPin',
+  '12': 'atNote.err.simPuk',
+  '13': 'atNote.err.simFailure',
+  '14': 'atNote.err.simBusy',
+  '15': 'atNote.err.simWrong',
+  '16': 'atNote.err.password',
+  '30': 'atNote.err.noService',
+  '31': 'atNote.err.timeout',
+  '100': 'atNote.err.unknown',
 };
 
-const CMS_ERRORS: Record<string, string> = {
-  '300': 'modem failure',
-  '302': 'operation not allowed',
-  '303': 'operation not supported',
-  '304': 'invalid PDU mode parameter',
-  '305': 'invalid text mode parameter',
-  '310': 'SIM not inserted',
-  '311': 'SIM PIN required',
-  '321': 'invalid memory index',
-  '322': 'memory full',
-  '330': 'service centre address unknown',
-  '331': 'no network service',
-  '500': 'unknown error',
+const CMS_ERRORS: Record<string, MessageKey> = {
+  '300': 'atNote.err.modem',
+  '302': 'atNote.err.notAllowed',
+  '303': 'atNote.err.notSupported',
+  '304': 'atNote.err.pduParam',
+  '305': 'atNote.err.textParam',
+  '310': 'atNote.err.simNotInserted',
+  '311': 'atNote.err.simPin',
+  '321': 'atNote.err.memoryIndex',
+  '322': 'atNote.err.memoryFull',
+  '330': 'atNote.err.smsc',
+  '331': 'atNote.err.noService',
+  '500': 'atNote.err.unknown',
+};
+
+const ACTIVITY: Record<string, MessageKey> = {
+  '0': 'atNote.activity.0',
+  '3': 'atNote.activity.3',
+  '4': 'atNote.activity.4',
+};
+
+const FUNCTIONALITY: Record<string, MessageKey> = {
+  '0': 'atNote.fun.0',
+  '1': 'atNote.fun.1',
+  '4': 'atNote.fun.4',
 };
 
 function args(line: string, prefix: string): string[] {
@@ -231,6 +246,12 @@ function args(line: string, prefix: string): string[] {
     .slice(prefix.length)
     .split(',')
     .map((a) => a.trim().replace(/^"|"$/g, ''));
+}
+
+/** Translates a code through a table, or says which code it was. */
+function lookup(table: Record<string, MessageKey>, code: string | undefined, fallback: string) {
+  const key = table[code ?? ''];
+  return key ? t(key) : fallback;
 }
 
 /** Plain-language notes for the parts of a response the console understands. */
@@ -242,63 +263,61 @@ export function decodeATResponse(response: string): string[] {
       const [rssi, ber] = args(line, '+CSQ:');
       notes.push(
         rssi === '99'
-          ? 'Signal: unknown or not detectable'
-          : `Signal: ${-113 + 2 * Number(rssi)} dBm (rssi ${rssi} of 31)${
-              ber && ber !== '99' ? `, bit error class ${ber}` : ''
-            }`,
+          ? t('atNote.signalUnknown')
+          : t('atNote.signal', { dbm: -113 + 2 * Number(rssi), rssi: rssi ?? '' }) +
+              (ber && ber !== '99' ? t('atNote.ber', { ber }) : ''),
       );
     } else if (line.startsWith('+CREG:') || line.startsWith('+CGREG:')) {
       const prefix = line.startsWith('+CREG:') ? '+CREG:' : '+CGREG:';
       const a = args(line, prefix);
       // The read form answers <n>,<stat>; unsolicited reports carry only <stat>.
       const stat = a.length >= 2 ? a[1] : a[0];
-      const label = prefix === '+CREG:' ? 'Network' : 'Packet data';
-      notes.push(`${label}: ${REG_STATUS[stat ?? ''] ?? `status ${stat}`}`);
+      const status = lookup(REG_STATUS, stat, t('atNote.statusCode', { code: stat ?? '' }));
+      notes.push(t(prefix === '+CREG:' ? 'atNote.network' : 'atNote.packet', { status }));
     } else if (line.startsWith('+CPIN:')) {
       const code = line.slice('+CPIN:'.length).trim();
       notes.push(
         code === 'READY'
-          ? 'SIM ready, no PIN needed'
+          ? t('atNote.simReady')
           : code === 'SIM PIN'
-            ? 'SIM is waiting for its PIN'
+            ? t('atNote.simPin')
             : code === 'SIM PUK'
-              ? 'SIM is blocked and needs the PUK'
-              : `SIM state: ${code}`,
+              ? t('atNote.simPuk')
+              : t('atNote.simState', { state: code }),
       );
     } else if (line.startsWith('+CMGF:')) {
       const [mode] = args(line, '+CMGF:');
-      notes.push(mode === '1' ? 'SMS format: text mode' : 'SMS format: PDU mode');
+      notes.push(mode === '1' ? t('atNote.textMode') : t('atNote.pduMode'));
     } else if (line.startsWith('+COPS:') && !line.includes('(')) {
       const [mode, , oper, act] = args(line, '+COPS:');
       const selection =
         mode === '0'
-          ? 'automatic'
+          ? t('atNote.automatic')
           : mode === '1'
-            ? 'manual'
+            ? t('atNote.manual')
             : mode === '2'
-              ? 'deregistered'
-              : `mode ${mode}`;
+              ? t('atNote.deregistered')
+              : t('atNote.mode', { mode: mode ?? '' });
+      const details = act && ACCESS_TECH[act] ? `${selection}, ${ACCESS_TECH[act]}` : selection;
       notes.push(
         oper
-          ? `Operator: ${oper} (${selection}${act && ACCESS_TECH[act] ? `, ${ACCESS_TECH[act]}` : ''})`
-          : `No operator selected (${selection})`,
+          ? t('atNote.operator', { operator: oper, details })
+          : t('atNote.noOperator', { details: selection }),
       );
     } else if (line.startsWith('+CPAS:')) {
       const [pas] = args(line, '+CPAS:');
-      const states: Record<string, string> = {
-        '0': 'ready',
-        '3': 'ringing',
-        '4': 'call in progress',
-      };
-      notes.push(`Activity: ${states[pas ?? ''] ?? `status ${pas}`}`);
+      const state = lookup(ACTIVITY, pas, t('atNote.statusCode', { code: pas ?? '' }));
+      notes.push(t('atNote.activity', { state }));
     } else if (line.startsWith('+CFUN:')) {
       const [fun] = args(line, '+CFUN:');
-      const levels: Record<string, string> = { '0': 'minimum', '1': 'full', '4': 'radio off' };
-      notes.push(`Functionality: ${levels[fun ?? ''] ?? `level ${fun}`}`);
+      const level = lookup(FUNCTIONALITY, fun, t('atNote.level', { level: fun ?? '' }));
+      notes.push(t('atNote.functionality', { level }));
     } else if (line.startsWith('+CPMS:')) {
       const a = args(line, '+CPMS:');
       for (let i = 0; i + 2 < a.length; i += 3) {
-        notes.push(`Storage ${a[i]}: ${a[i + 1]} of ${a[i + 2]} slots used`);
+        notes.push(
+          t('atNote.storage', { name: a[i] ?? '', used: a[i + 1] ?? '', total: a[i + 2] ?? '' }),
+        );
       }
     }
     for (const [prefix, table] of [
@@ -308,7 +327,7 @@ export function decodeATResponse(response: string): string[] {
       const at = line.indexOf(prefix);
       if (at === -1) continue;
       const code = line.slice(at + prefix.length).trim();
-      notes.push(`Error ${code}: ${table[code] ?? 'see the modem documentation'}`);
+      notes.push(t('atNote.error', { code, reason: lookup(table, code, t('atNote.seeDocs')) }));
     }
   }
   return notes;

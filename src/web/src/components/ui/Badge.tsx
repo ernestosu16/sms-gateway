@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
+import type { MessageKey } from '@/locales/en';
 
 const tones = {
   neutral: 'bg-neutral-soft text-neutral-soft-fg',
@@ -36,28 +38,30 @@ export function Badge({ tone = 'neutral', dot = false, className, children }: Ba
 }
 
 // Every message status the server emits, in one place for all views.
-const MESSAGE_STATUS: Record<string, { tone: Tone; label: string }> = {
-  pending: { tone: 'warning', label: 'Pending' },
-  sending: { tone: 'primary', label: 'Sending' },
-  sent: { tone: 'success', label: 'Sent' },
-  failed: { tone: 'danger', label: 'Failed' },
-  received: { tone: 'primary', label: 'Unread' },
-  read: { tone: 'neutral', label: 'Read' },
+const MESSAGE_STATUS: Record<string, { tone: Tone; label: MessageKey }> = {
+  pending: { tone: 'warning', label: 'status.pending' },
+  sending: { tone: 'primary', label: 'status.sending' },
+  sent: { tone: 'success', label: 'status.sent' },
+  failed: { tone: 'danger', label: 'status.failed' },
+  received: { tone: 'primary', label: 'status.unread' },
+  read: { tone: 'neutral', label: 'status.read' },
 };
 
 export function MessageStatusBadge({ status }: { status: string }) {
-  const { tone, label } = MESSAGE_STATUS[status] ?? { tone: 'neutral', label: status };
+  const { t } = useI18n();
+  const known = MESSAGE_STATUS[status];
   return (
-    <Badge tone={tone} dot>
-      {label}
+    <Badge tone={known?.tone ?? 'neutral'} dot>
+      {known ? t(known.label) : status}
     </Badge>
   );
 }
 
 export function DirectionBadge({ direction }: { direction: string }) {
+  const { t } = useI18n();
   return direction === 'inbound' ? (
-    <Badge tone="primary">IN</Badge>
+    <Badge tone="primary">{t('direction.in')}</Badge>
   ) : (
-    <Badge tone="neutral">OUT</Badge>
+    <Badge tone="neutral">{t('direction.out')}</Badge>
   );
 }

@@ -10,6 +10,8 @@ import {
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { formatTimeWithSeconds } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 import {
   buildSuggestions,
   decodeATResponse,
@@ -59,14 +61,6 @@ const LISTBOX_ID = 'at-suggestions';
 const STORAGE_KEY = 'sms-gateway.at-console';
 const MAX_ENTRIES = 200;
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
 /** Modem replies use CRLF and pad with blank lines; a console shows the content. */
 function cleanResponse(response: string): string {
   return response.replace(/\r/g, '').replace(/^\n+|\n+$/g, '');
@@ -111,6 +105,7 @@ export default function ATConsole() {
   const logRef = useRef<ComponentRef<'div'>>(null);
   const nextId = useRef(entries.reduce((max, e) => Math.max(max, e.id + 1), 0));
   const { confirm, dialog } = useConfirm();
+  const { t, language } = useI18n();
 
   useEffect(() => {
     api
@@ -126,7 +121,12 @@ export default function ATConsole() {
     if (log) log.scrollTop = log.scrollHeight;
   }, [entries]);
 
-  const allSuggestions = useMemo(() => (catalog ? buildSuggestions(catalog) : []), [catalog]);
+  // Rebuilt per language: entries the catalog lacks carry a translated description.
+  const allSuggestions = useMemo(
+    () => (catalog ? buildSuggestions(catalog) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [catalog, language],
+  );
   const suggestions = useMemo(
     () => matchSuggestions(allSuggestions, command),
     [allSuggestions, command],
@@ -259,15 +259,15 @@ export default function ATConsole() {
           const ok = await confirm({
             title:
               required.risk === 'unknown'
-                ? 'Send an unrecognised command?'
-                : `Run ${required.title ?? cmd}?`,
+                ? t('at.unknownTitle')
+                : t('at.runTitle', { command: required.title ?? cmd }),
             description: (
               <>
                 <code className="font-mono text-xs break-all text-fg">{cmd}</code>
                 <p className="mt-2">{required.warning}</p>
               </>
             ),
-            confirmLabel: 'Send anyway',
+            confirmLabel: t('at.sendAnyway'),
             tone: required.risk === 'dangerous' ? 'danger' : 'warning',
           });
           if (!ok) {
@@ -281,7 +281,7 @@ export default function ATConsole() {
             ? data.error
             : err instanceof Error
               ? err.message
-              : 'Command failed.';
+              : t('at.commandFailed');
         updateEntry(id, { status: 'error', response: message });
       }
     };
@@ -304,12 +304,12 @@ export default function ATConsole() {
   return (
     <Card>
       <CardHeader
-        title="AT Console"
-        description="Type a command or search by name, e.g. csq or signal."
+        title={t('at.title')}
+        description={t('at.description')}
         actions={
           entries.length > 0 && (
             <Button variant="ghost" size="sm" onClick={() => setEntries([])} disabled={sending}>
-              Clear console
+              {t('at.clear')}
             </Button>
           )
         }
@@ -335,13 +335,11 @@ export default function ATConsole() {
             ref={logRef}
             role="log"
             aria-live="polite"
-            aria-label="AT console output"
+            aria-label={t('at.output')}
             className="h-72 space-y-3 overflow-y-auto p-3 sm:h-96 sm:p-4"
           >
             {entries.length === 0 ? (
-              <p className="text-slate-500">
-                # Responses from the modem appear here. Try AT+CSQ or pick a quick command.
-              </p>
+              <p className="text-slate-500">{t('at.emptyLog')}</p>
             ) : (
               entries.map((entry) => (
                 <ConsoleLine key={entry.id} entry={entry} onRetry={run} retryDisabled={sending} />
@@ -357,7 +355,7 @@ export default function ATConsole() {
               ›
             </span>
             <label htmlFor="atCommand" className="sr-only">
-              AT command
+              {t('at.command')}
             </label>
             <input
               ref={inputRef}
@@ -391,7 +389,9 @@ export default function ATConsole() {
               loading={sending}
               icon={<TerminalIcon className="h-4 w-4" />}
             >
-              <span className="hidden sm:inline">{sending ? 'Sending...' : 'Send'}</span>
+              <span className="hidden sm:inline">
+                {sending ? t('common.sending') : t('at.send')}
+              </span>
             </Button>
 
             {/* The prompt sits at the bottom, so suggestions open upwards. */}
@@ -399,7 +399,7 @@ export default function ATConsole() {
               <ul
                 id={LISTBOX_ID}
                 role="listbox"
-                aria-label="Command suggestions"
+                aria-label={t('at.suggestions')}
                 className="absolute inset-x-0 bottom-full z-10 mb-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface py-1 font-sans shadow-xl"
               >
                 {suggestions.map((s, i) => {
@@ -447,16 +447,10 @@ export default function ATConsole() {
         {syntaxError && !listOpen ? (
           <p className="-mt-2 text-xs text-danger">{syntaxError}</p>
         ) : (
-          <p className="-mt-2 hidden text-xs text-fg-subtle sm:block">
-            Tab completes · ↑↓ browse suggestions or previous commands · Esc closes
-          </p>
+          <p className="-mt-2 hidden text-xs text-fg-subtle sm:block">{t('at.keys')}</p>
         )}
 
-        {catalogError && (
-          <Alert tone="warning">
-            The command reference could not be loaded. Commands can still be sent.
-          </Alert>
-        )}
+        {catalogError && <Alert tone="warning">{t('at.catalogFailed')}</Alert>}
 
         {docInfo ? (
           <ATCommandDoc
@@ -500,6 +494,7 @@ function ConsoleLine({
   onRetry: (command: string) => void;
   retryDisabled: boolean;
 }) {
+  const { t } = useI18n();
   const response = cleanResponse(entry.response);
   const notes =
     entry.status === 'ok' || entry.status === 'error' ? decodeATResponse(entry.response) : [];
@@ -518,23 +513,23 @@ function ConsoleLine({
           onClick={() => onRetry(entry.command)}
           disabled={retryDisabled}
           className="shrink-0 rounded p-1 text-slate-500 transition hover:bg-white/10 hover:text-slate-200 disabled:opacity-40 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
-          aria-label={`Run ${entry.command} again`}
-          title="Run again"
+          aria-label={t('at.runAgainLabel', { command: entry.command })}
+          title={t('at.runAgain')}
         >
           <RefreshIcon className="h-3.5 w-3.5" />
         </button>
         <time dateTime={entry.time} className="shrink-0 text-[11px] text-slate-500">
-          {formatTime(entry.time)}
+          {formatTimeWithSeconds(entry.time)}
         </time>
       </div>
 
       <div className="mt-1 pl-4">
         {entry.status === 'pending' && (
           <p className="flex items-center gap-2 text-slate-400">
-            <Spinner className="h-3 w-3" /> waiting for the modem…
+            <Spinner className="h-3 w-3" /> {t('at.waiting')}
           </p>
         )}
-        {entry.status === 'cancelled' && <p className="text-amber-300"># cancelled, not sent</p>}
+        {entry.status === 'cancelled' && <p className="text-amber-300">{t('at.cancelled')}</p>}
         {(entry.status === 'ok' || entry.status === 'error') && (
           <pre
             className={cn(
@@ -542,7 +537,7 @@ function ConsoleLine({
               entry.status === 'error' ? 'text-red-400' : 'text-slate-300',
             )}
           >
-            {response || '(empty response)'}
+            {response || t('at.emptyResponse')}
           </pre>
         )}
         {notes.map((note, i) => (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/lib/api';
+import { t } from '@/lib/i18n';
 
 export const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
 export const DEFAULT_PAGE_SIZE = 50;
@@ -90,7 +91,7 @@ export function usePaginatedList<T>(
         setTotal(header !== undefined ? Number(header) : res.data.length);
         setError('');
       } catch {
-        if (!cancelled) setError('Failed to load the list.');
+        if (!cancelled) setError(t('common.listLoadFailed'));
       } finally {
         if (!cancelled) {
           setLoading(false);

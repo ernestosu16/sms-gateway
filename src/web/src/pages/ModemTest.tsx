@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
+import type { MessageKey } from '@/locales/en';
 import ATConsole from '@/components/at/ATConsole';
 import {
   Badge,
@@ -24,12 +26,26 @@ interface ModemSignal {
   quality: string;
 }
 
+const QUALITY_LABELS: Record<string, MessageKey> = {
+  excellent: 'quality.excellent',
+  good: 'quality.good',
+  fair: 'quality.fair',
+  poor: 'quality.poor',
+  none: 'quality.none',
+  unknown: 'quality.unknown',
+};
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function SignalBars({ strength }: { strength: number }) {
+  const { t } = useI18n();
   // Normalize strength to 0-4 bars (signal_strength is typically 0-31 for GSM)
   const bars = Math.min(4, Math.max(0, Math.round((strength / 31) * 4)));
 
   return (
-    <div className="flex items-end gap-1" title={`Signal: ${strength}/31`}>
+    <div className="flex items-end gap-1" title={t('modem.signalTitle', { strength })}>
       {[1, 2, 3, 4].map((level) => (
         <div
           key={level}
@@ -59,10 +75,11 @@ function PanelState({
   error: string;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   if (loading) {
     return (
       <p className="flex items-center gap-2 text-sm text-fg-muted">
-        <Spinner className="h-4 w-4" /> Loading...
+        <Spinner className="h-4 w-4" /> {t('common.loading')}
       </p>
     );
   }
@@ -73,6 +90,7 @@ function PanelState({
 export default function ModemTest() {
   const { user } = useAuth();
   const isAdmin = user?.is_admin ?? false;
+  const { t } = useI18n();
 
   const [status, setStatus] = useState<ModemStatus | null>(null);
   const [signal, setSignal] = useState<ModemSignal | null>(null);
@@ -88,11 +106,11 @@ export default function ModemTest() {
       const response = await api.get('/modem/status');
       setStatus(response.data);
     } catch {
-      setStatusError('Failed to fetch modem status.');
+      setStatusError(t('modem.statusFailed'));
     } finally {
       setStatusLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchSignal = useCallback(async () => {
     setSignalLoading(true);
@@ -101,11 +119,11 @@ export default function ModemTest() {
       const response = await api.get('/modem/signal');
       setSignal(response.data);
     } catch {
-      setSignalError('Failed to fetch signal information.');
+      setSignalError(t('modem.signalFailed'));
     } finally {
       setSignalLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchStatus();
@@ -123,8 +141,8 @@ export default function ModemTest() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Modem Test"
-        description="Test modem connectivity and AT commands."
+        title={t('nav.modemTest')}
+        description={t('modem.description')}
         actions={
           <Button
             variant="secondary"
@@ -132,7 +150,7 @@ export default function ModemTest() {
             loading={refreshing}
             icon={<RefreshIcon className="h-4 w-4" />}
           >
-            {refreshing ? 'Refreshing...' : 'Refresh'}
+            {refreshing ? t('modem.refreshing') : t('modem.refresh')}
           </Button>
         }
       />
@@ -140,7 +158,7 @@ export default function ModemTest() {
       {/* Status and Signal cards */}
       <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
         <Card>
-          <CardHeader title="Modem Status" />
+          <CardHeader title={t('modem.status')} />
           <CardBody>
             <PanelState loading={statusLoading} error={statusError}>
               {status ? (
@@ -149,18 +167,18 @@ export default function ModemTest() {
                     className={cn('h-3 w-3 rounded-full', connected ? 'bg-success' : 'bg-danger')}
                   />
                   <span className="text-lg font-semibold text-fg">
-                    {connected ? 'Connected' : 'Disconnected'}
+                    {connected ? t('modem.connected') : t('modem.disconnected')}
                   </span>
                 </div>
               ) : (
-                <p className="text-sm text-fg-muted">No status data available.</p>
+                <p className="text-sm text-fg-muted">{t('modem.noStatus')}</p>
               )}
             </PanelState>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Signal Strength" />
+          <CardHeader title={t('modem.signal')} />
           <CardBody>
             <PanelState loading={signalLoading} error={signalError}>
               {signal ? (
@@ -170,12 +188,16 @@ export default function ModemTest() {
                     {signal.signal}
                     <span className="ml-1 text-sm font-normal text-fg-subtle">/ 31</span>
                   </span>
-                  <Badge tone={qualityTone(signal.quality)} className="capitalize">
-                    {signal.quality}
+                  <Badge tone={qualityTone(signal.quality)}>
+                    {capitalize(
+                      QUALITY_LABELS[signal.quality]
+                        ? t(QUALITY_LABELS[signal.quality]!)
+                        : signal.quality,
+                    )}
                   </Badge>
                 </div>
               ) : (
-                <p className="text-sm text-fg-muted">No signal data available.</p>
+                <p className="text-sm text-fg-muted">{t('modem.noSignal')}</p>
               )}
             </PanelState>
           </CardBody>

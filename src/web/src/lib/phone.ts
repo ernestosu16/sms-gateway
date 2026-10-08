@@ -1,15 +1,21 @@
 import { AsYouType, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/min';
+import { getLocale } from '@/lib/i18n';
 
 // E.164 caps a number at 15 digits including the country code.
 const MAX_DIGITS = 15;
 
-const regionNames =
-  typeof Intl.DisplayNames === 'function'
-    ? new Intl.DisplayNames(['en'], { type: 'region' })
-    : null;
+// One formatter per UI language, created on first use.
+const regionNames = new Map<string, Intl.DisplayNames>();
 
 function countryName(country: CountryCode): string {
-  return regionNames?.of(country) ?? country;
+  if (typeof Intl.DisplayNames !== 'function') return country;
+  const locale = getLocale();
+  let names = regionNames.get(locale);
+  if (!names) {
+    names = new Intl.DisplayNames([locale], { type: 'region' });
+    regionNames.set(locale, names);
+  }
+  return names.of(country) ?? country;
 }
 
 /** Flag emoji built from the two regional-indicator letters of an ISO code. */

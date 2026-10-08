@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import Pagination from '@/components/Pagination';
 import { usePaginatedList } from '@/lib/usePaginatedList';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -33,6 +34,7 @@ interface APIKey {
 }
 
 export default function APIKeys() {
+  const { t } = useI18n();
   const {
     items: keys,
     total,
@@ -68,7 +70,7 @@ export default function APIKeys() {
       setLabel('');
       refresh();
     } catch {
-      setActionError('Failed to create API key.');
+      setActionError(t('apiKeys.createFailed'));
     } finally {
       setCreating(false);
     }
@@ -76,31 +78,31 @@ export default function APIKeys() {
 
   const handleDeactivate = async (key: APIKey) => {
     const confirmed = await confirm({
-      title: `Deactivate "${key.label}"?`,
-      description: 'Requests using this key will be rejected. The key stays listed as inactive.',
-      confirmLabel: 'Deactivate',
+      title: t('apiKeys.deactivateTitle', { label: key.label }),
+      description: t('apiKeys.deactivateBody'),
+      confirmLabel: t('apiKeys.deactivate'),
     });
     if (!confirmed) return;
     try {
       await api.delete(`/apikeys/${key.id}`);
       refresh();
     } catch {
-      setActionError('Failed to deactivate API key.');
+      setActionError(t('apiKeys.deactivateFailed'));
     }
   };
 
   const handleDelete = async (key: APIKey) => {
     const confirmed = await confirm({
-      title: `Delete "${key.label}"?`,
-      description: 'This permanently removes the key and cannot be undone.',
-      confirmLabel: 'Delete',
+      title: t('apiKeys.deleteTitle', { label: key.label }),
+      description: t('apiKeys.deleteBody'),
+      confirmLabel: t('common.delete'),
     });
     if (!confirmed) return;
     try {
       await api.delete(`/apikeys/${key.id}/delete`);
       removeItems(new Set([key.id]));
     } catch {
-      setActionError('Failed to delete API key.');
+      setActionError(t('apiKeys.deleteFailed'));
     }
   };
 
@@ -110,51 +112,51 @@ export default function APIKeys() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setActionError('Failed to copy to clipboard.');
+      setActionError(t('common.copyFailed'));
     }
   };
 
   const columns: Column<APIKey>[] = [
     {
       key: 'label',
-      header: 'Label',
+      header: t('apiKeys.label'),
       mobile: 'title',
       className: 'font-medium text-fg',
       cell: (k) => k.label,
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status'),
       mobile: 'title',
       cell: (k) =>
         k.is_active ? (
           <Badge tone="success" dot>
-            Active
+            {t('common.active')}
           </Badge>
         ) : (
-          <Badge dot>Inactive</Badge>
+          <Badge dot>{t('apiKeys.inactive')}</Badge>
         ),
     },
     {
       key: 'created',
-      header: 'Created',
+      header: t('common.created'),
       className: 'whitespace-nowrap text-fg-muted',
       cell: (k) => formatDate(k.created_at),
     },
     {
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="sr-only">{t('common.actions')}</span>,
       mobile: 'footer',
       className: 'text-right',
       cell: (k) => (
         <div className="flex flex-wrap items-center gap-2 md:justify-end">
           {k.is_active && (
             <Button variant="secondary" size="sm" onClick={() => handleDeactivate(k)}>
-              Deactivate
+              {t('apiKeys.deactivate')}
             </Button>
           )}
           <Button variant="danger-soft" size="sm" onClick={() => handleDelete(k)}>
-            Delete
+            {t('common.delete')}
           </Button>
         </div>
       ),
@@ -163,16 +165,14 @@ export default function APIKeys() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="API Keys" description="Manage API keys for programmatic access." />
+      <PageHeader title={t('nav.apiKeys')} description={t('apiKeys.description')} />
 
       {error && <Alert>{error}</Alert>}
 
       {/* New key reveal banner */}
       {newKey && (
         <Alert tone="warning">
-          <p className="font-semibold">
-            Your new API key has been created. Copy it now -- it will not be shown again.
-          </p>
+          <p className="font-semibold">{t('apiKeys.created')}</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <code className="min-w-0 flex-1 rounded-lg border border-border bg-field px-3 py-2 font-mono text-sm break-all text-fg">
               {newKey}
@@ -181,7 +181,7 @@ export default function APIKeys() {
               onClick={() => handleCopy(newKey)}
               icon={copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
             >
-              {copied ? 'Copied!' : 'Copy'}
+              {copied ? t('common.copied') : t('common.copy')}
             </Button>
           </div>
           <button
@@ -189,28 +189,28 @@ export default function APIKeys() {
             onClick={() => setNewKey(null)}
             className="mt-2 text-sm underline underline-offset-2 hover:opacity-80"
           >
-            Dismiss
+            {t('apiKeys.dismiss')}
           </button>
         </Alert>
       )}
 
       {/* Create form */}
       <Card>
-        <CardHeader title="Create New API Key" />
+        <CardHeader title={t('apiKeys.createTitle')} />
         <CardBody>
           <form onSubmit={handleCreate} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <Field label="Label" htmlFor="keyLabel" className="flex-1">
+            <Field label={t('apiKeys.label')} htmlFor="keyLabel" className="flex-1">
               <Input
                 id="keyLabel"
                 type="text"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 required
-                placeholder="e.g. Production Server"
+                placeholder={t('apiKeys.labelPlaceholder')}
               />
             </Field>
             <Button type="submit" loading={creating} icon={<PlusIcon className="h-4 w-4" />}>
-              {creating ? 'Creating...' : 'Create Key'}
+              {creating ? t('common.creating') : t('apiKeys.create')}
             </Button>
           </form>
         </CardBody>
@@ -219,9 +219,9 @@ export default function APIKeys() {
       {/* Keys table */}
       <Card className="overflow-hidden">
         {loading ? (
-          <LoadingState label="Loading API keys..." />
+          <LoadingState label={t('apiKeys.loading')} />
         ) : keys.length === 0 ? (
-          <EmptyState icon={<KeyIcon className="h-6 w-6" />} title="No API keys found." />
+          <EmptyState icon={<KeyIcon className="h-6 w-6" />} title={t('apiKeys.empty')} />
         ) : (
           <>
             <DataTable rows={keys} columns={columns} busy={refreshing} />
@@ -231,7 +231,7 @@ export default function APIKeys() {
               total={total}
               totalPages={totalPages}
               busy={refreshing}
-              itemLabel="API keys"
+              itemLabel={t('apiKeys.items')}
               onPageChange={setPage}
               onPageSizeChange={setPageSize}
             />

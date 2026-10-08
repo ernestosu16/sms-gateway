@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import LanguageControl from '@/components/LanguageControl';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import { Card, MessageIcon } from '@/components/ui';
 
@@ -12,7 +13,8 @@ interface AuthShellProps {
 export default function AuthShell({ title, description, children }: AuthShellProps) {
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center bg-app px-4 py-16">
-      <div className="absolute top-4 right-4">
+      <div className="absolute top-4 right-4 flex flex-wrap justify-end gap-2">
+        <LanguageControl />
         <ThemeModeControl />
       </div>
       <div className="w-full max-w-sm">

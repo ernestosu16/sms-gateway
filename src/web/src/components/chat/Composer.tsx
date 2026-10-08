@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
 import { MAX_BODY_CHARS } from '@/lib/messages';
 import { smsInfo } from '@/lib/sms';
 import { SendIcon } from '@/components/ui';
@@ -22,12 +23,8 @@ interface ComposerProps {
 
 const MAX_HEIGHT_PX = 160;
 
-export default function Composer({
-  onSend,
-  disabled,
-  autoFocus,
-  placeholder = 'Text message',
-}: ComposerProps) {
+export default function Composer({ onSend, disabled, autoFocus, placeholder }: ComposerProps) {
+  const { t } = useI18n();
   const [body, setBody] = useState('');
   const textareaRef = useRef<ComponentRef<'textarea'>>(null);
 
@@ -99,7 +96,7 @@ export default function Composer({
     >
       <div className="flex items-end gap-2">
         <label htmlFor="composer" className="sr-only">
-          Message
+          {t('common.message')}
         </label>
         <textarea
           id="composer"
@@ -108,7 +105,7 @@ export default function Composer({
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={1}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('composer.placeholder')}
           disabled={disabled}
           aria-invalid={tooLong}
           className="block max-h-40 min-h-10 w-full flex-1 resize-none rounded-2xl border border-border-strong bg-field px-4 py-2 text-sm leading-6 text-fg placeholder:text-fg-subtle focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none disabled:opacity-50"
@@ -116,8 +113,8 @@ export default function Composer({
         <button
           type="submit"
           disabled={!canSend}
-          aria-label="Send message"
-          title="Send (Enter)"
+          aria-label={t('composer.send')}
+          title={t('composer.sendTitle')}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg shadow-sm transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
         >
           <SendIcon className="h-[18px] w-[18px]" />
@@ -129,8 +126,11 @@ export default function Composer({
           className={cn('mt-1 px-2 text-right text-xs', tooLong ? 'text-danger' : 'text-fg-subtle')}
         >
           {tooLong
-            ? `${length}/${MAX_BODY_CHARS} characters — too long to send`
-            : `${info.encoding === 'UCS-2' ? 'Unicode · ' : ''}${info.remaining} left · ${info.segments} SMS`}
+            ? t('composer.tooLong', { length, max: MAX_BODY_CHARS })
+            : `${info.encoding === 'UCS-2' ? t('composer.unicode') : ''}${t('composer.counter', {
+                remaining: info.remaining,
+                segments: info.segments,
+              })}`}
         </p>
       )}
     </form>
