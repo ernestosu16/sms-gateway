@@ -5,7 +5,6 @@ import api from '@/lib/api';
 import {
   chatPath,
   isDialable,
-  MAX_CONTACT_NAME,
   RECIPIENT_FORMAT_HINT,
   notifyConversationsChanged,
   type SendSMSResponse,
@@ -14,12 +13,11 @@ import { describeTyping } from '@/lib/phone';
 import Avatar from '@/components/chat/Avatar';
 import Composer from '@/components/chat/Composer';
 import PhoneInput from '@/components/PhoneInput';
-import { Alert, ArrowLeftIcon, Button, Input } from '@/components/ui';
+import { Alert, ArrowLeftIcon, Button } from '@/components/ui';
 
 export default function NewConversation({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
   const [to, setTo] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -34,11 +32,6 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
     setSending(true);
     try {
       await api.post<SendSMSResponse>('/sms/send', { to: phone, body });
-      if (name.trim()) {
-        // Best effort: the message is already sent, and the name can still be
-        // added from the thread header if this fails.
-        await api.put('/contacts', { name: name.trim() }, { params: { phone } }).catch(() => {});
-      }
       notifyConversationsChanged();
       // Opens the (possibly existing) thread, where a failed send shows up as a
       // bubble with Retry.
@@ -87,17 +80,6 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
           aria-invalid={error !== ''}
           aria-describedby={error ? 'new-to-error' : undefined}
         />
-        <label htmlFor="new-name" className="mt-3 mb-1.5 block text-xs font-medium text-fg-muted">
-          Name <span className="font-normal text-fg-subtle">(optional)</span>
-        </label>
-        <Input
-          id="new-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={MAX_CONTACT_NAME}
-          placeholder="e.g. Jane Doe"
-          autoComplete="off"
-        />
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto bg-app px-4 py-8">
@@ -108,11 +90,9 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
         )}
         {isDialable(to) ? (
           <div className="flex flex-col items-center text-center">
-            <Avatar phone={to} name={name.trim()} size="lg" />
-            <p className="mt-3 text-lg font-semibold text-fg">{name.trim() || details.formatted}</p>
-            <p className="text-sm text-fg-muted">
-              {[name.trim() && details.formatted, details.countryName].filter(Boolean).join(' · ')}
-            </p>
+            <Avatar phone={to} size="lg" />
+            <p className="mt-3 text-lg font-semibold text-fg">{details.formatted}</p>
+            {details.countryName && <p className="text-sm text-fg-muted">{details.countryName}</p>}
             <p className="mt-4 text-sm text-fg-subtle">Write your first message below.</p>
           </div>
         ) : (
