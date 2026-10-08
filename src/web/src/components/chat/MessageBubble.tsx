@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatTime } from '@/lib/format';
+import { linkify } from '@/lib/linkify';
 import type { ThreadMessage } from '@/lib/useChat';
 import { AlertIcon, Button, CheckIcon, ClockIcon, CopyIcon, TrashIcon } from '@/components/ui';
 
@@ -36,6 +38,9 @@ function StatusIndicator({ status }: { status: string }) {
   return null;
 }
 
+// Long enough to tell a single click from the start of a double click.
+const DOUBLE_CLICK_MS = 250;
+
 export default function MessageBubble({
   message,
   startsGroup,
@@ -46,6 +51,8 @@ export default function MessageBubble({
   onDelete,
   onRetry,
 }: MessageBubbleProps) {
+  const clickTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(clickTimer.current), []);
   const outbound = message.direction === 'outbound';
   const failed = message.status === 'failed';
 
@@ -58,13 +65,22 @@ export default function MessageBubble({
         startsGroup ? 'mt-3' : 'mt-0.5',
       )}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
+      {/* A div, not a button: browsers do not let users select text inside a
+          button, and messages need to be selectable and copyable. */}
+      <div
+        onClick={(e) => {
+          window.clearTimeout(clickTimer.current);
+          // Following a link, or a double/triple click that selects text, must
+          // not also toggle details. A single click waits out the double-click
+          // window so a word selection does not open them first.
+          if (e.target instanceof window.Element && e.target.closest('a')) return;
+          if (e.detail > 1) return;
+          clickTimer.current = window.setTimeout(() => {
+            if (window.getSelection()?.isCollapsed ?? true) onToggle();
+          }, DOUBLE_CLICK_MS);
+        }}
         className={cn(
-          'max-w-[85%] rounded-2xl px-3.5 py-2 text-left text-sm shadow-sm transition sm:max-w-[70%]',
-          'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-app focus-visible:outline-none',
+          'max-w-[85%] cursor-pointer rounded-2xl px-3.5 py-2 text-left text-sm shadow-sm transition select-text sm:max-w-[70%]',
           outbound ? 'rounded-br-md' : 'rounded-bl-md',
           outbound && !failed && 'bg-primary text-primary-fg',
           outbound && failed && 'bg-danger-soft text-fg ring-1 ring-danger',
@@ -73,19 +89,45 @@ export default function MessageBubble({
           message.pending && 'opacity-70',
         )}
       >
-        <span className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
-          {message.body}
-        </span>
-        <span
+        <p className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {linkify(message.body).map((part, i) =>
+            part.href ? (
+              <a
+                key={i}
+                href={part.href}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className={cn(
+                  'underline underline-offset-2 hover:decoration-2',
+                  outbound && !failed ? 'text-primary-fg' : 'text-primary',
+                )}
+              >
+                {part.text}
+              </a>
+            ) : (
+              part.text
+            ),
+          )}
+        </p>
+        {/* The timestamp doubles as the keyboard-reachable details toggle. */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          aria-expanded={expanded}
+          aria-label={`Message details, ${formatTime(message.created_at)}`}
           className={cn(
-            'mt-1 flex items-center justify-end gap-1 text-[11px] leading-none',
+            'mt-1 ml-auto flex items-center justify-end gap-1 rounded text-[11px] leading-none',
+            'focus-visible:ring-2 focus-visible:ring-current focus-visible:outline-none',
             outbound && !failed ? 'text-primary-fg/75' : 'text-fg-subtle',
           )}
         >
           <time dateTime={message.created_at}>{formatTime(message.created_at)}</time>
           {outbound && <StatusIndicator status={message.status} />}
-        </span>
-      </button>
+        </button>
+      </div>
 
       {failed && (
         <div className="mt-1 flex items-center gap-1.5 text-xs text-danger">
