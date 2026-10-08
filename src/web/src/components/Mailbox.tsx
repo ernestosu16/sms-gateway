@@ -15,6 +15,7 @@ import {
   MessageStatusBadge,
   PageHeader,
   TrashIcon,
+  useConfirm,
   type Column,
 } from '@/components/ui';
 
@@ -55,6 +56,7 @@ export default function Mailbox({
     removeItems,
   } = usePaginatedList<Message>(path, params);
 
+  const { confirm, dialog } = useConfirm();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -86,7 +88,13 @@ export default function Mailbox({
 
   const handleDelete = async () => {
     if (selected.size === 0) return;
-    if (!confirm(`Delete ${selected.size} message${selected.size !== 1 ? 's' : ''}?`)) return;
+    const count = `${selected.size} message${selected.size !== 1 ? 's' : ''}`;
+    const confirmed = await confirm({
+      title: `Delete ${count}?`,
+      description: 'This permanently removes them from the gateway and cannot be undone.',
+      confirmLabel: 'Delete',
+    });
+    if (!confirmed) return;
 
     setDeleting(true);
     setDeleteError('');
@@ -207,6 +215,8 @@ export default function Mailbox({
           </>
         )}
       </Card>
+
+      {dialog}
     </div>
   );
 }
