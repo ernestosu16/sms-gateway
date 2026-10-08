@@ -13,6 +13,10 @@ function loadPageSize(): number {
     : DEFAULT_PAGE_SIZE;
 }
 
+function idField(item: unknown): string {
+  return (item as { id: string }).id;
+}
+
 interface UsePaginatedListResult<T> {
   items: T[];
   total: number;
@@ -40,11 +44,14 @@ interface UsePaginatedListResult<T> {
  * keeps existing API-key clients working, and it means `total` is the count of
  * everything matching the filter — not the length of the page.
  *
- * Items only need an `id`; messages, users and API keys all qualify.
+ * Items are keyed by their `id` unless `idOf` says otherwise (contacts are
+ * keyed by phone number). Pass a stable function, e.g. one defined at module
+ * scope.
  */
-export function usePaginatedList<T extends { id: string }>(
+export function usePaginatedList<T>(
   path: string,
   params?: Record<string, string>,
+  idOf: (item: T) => string = idField,
 ): UsePaginatedListResult<T> {
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -83,7 +90,7 @@ export function usePaginatedList<T extends { id: string }>(
         setTotal(header !== undefined ? Number(header) : res.data.length);
         setError('');
       } catch {
-        if (!cancelled) setError('Failed to load messages.');
+        if (!cancelled) setError('Failed to load the list.');
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -116,13 +123,16 @@ export function usePaginatedList<T extends { id: string }>(
 
   const refresh = useCallback(() => setReloadToken((t) => t + 1), []);
 
-  const removeItems = useCallback((ids: Set<string>) => {
-    // Drop them immediately so the UI responds, then refetch: the rows that
-    // shift up from the next page can only come from the server.
-    setItems((prev) => prev.filter((item) => !ids.has(item.id)));
-    setTotal((prev) => Math.max(0, prev - ids.size));
-    setReloadToken((t) => t + 1);
-  }, []);
+  const removeItems = useCallback(
+    (ids: Set<string>) => {
+      // Drop them immediately so the UI responds, then refetch: the rows that
+      // shift up from the next page can only come from the server.
+      setItems((prev) => prev.filter((item) => !ids.has(idOf(item))));
+      setTotal((prev) => Math.max(0, prev - ids.size));
+      setReloadToken((t) => t + 1);
+    },
+    [idOf],
+  );
 
   return {
     items,

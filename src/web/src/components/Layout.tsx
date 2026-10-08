@@ -6,6 +6,7 @@ import { useMessageStats } from '@/lib/messageActivity';
 import { useResizablePanel } from '@/lib/useResizablePanel';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import {
+  ContactIcon,
   DashboardIcon,
   KeyIcon,
   LoadingState,
@@ -26,6 +27,7 @@ const navSections = [
     items: [
       { to: '/', label: 'Dashboard', Icon: DashboardIcon },
       { to: '/chats', label: 'Messages', Icon: MessageIcon },
+      { to: '/contacts', label: 'Contacts', Icon: ContactIcon },
     ],
   },
   {

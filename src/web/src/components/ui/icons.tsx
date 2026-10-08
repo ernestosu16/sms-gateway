@@ -56,6 +56,13 @@ export const UsersIcon = icon(
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
   </>,
 );
+export const ContactIcon = icon(
+  <>
+    <rect x="4" y="2" width="16" height="20" rx="2" />
+    <circle cx="12" cy="10" r="3" />
+    <path d="M7 18a5 5 0 0 1 10 0M2 6h2M2 12h2M2 18h2" />
+  </>,
+);
 export const SignalIcon = icon(<path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16" />);
 export const LogoutIcon = icon(
   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,

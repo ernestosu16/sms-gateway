@@ -11,10 +11,11 @@ import Users from '@/pages/Users';
 import ModemTest from '@/pages/ModemTest';
 import { lazy, type ReactNode } from 'react';
 
-// The phone-number metadata (libphonenumber-js) is only needed by these two
+// The phone-number metadata (libphonenumber-js) is only needed by these
 // pages, so they load on demand and keep it out of the initial bundle.
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Chats = lazy(() => import('@/pages/Chats'));
+const Contacts = lazy(() => import('@/pages/Contacts'));
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, mustChangePassword } = useAuth();
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/chats" element={<Chats />} />
         <Route path="/chats/new" element={<Chats />} />
         <Route path="/chats/:phone" element={<Chats />} />
+        <Route path="/contacts" element={<Contacts />} />
         {/* Pre-chat pages, kept so bookmarks and old links still resolve. */}
         <Route path="/inbox" element={<Navigate to="/chats" replace />} />
         <Route path="/outbox" element={<Navigate to="/chats" replace />} />
