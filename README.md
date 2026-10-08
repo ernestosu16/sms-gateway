@@ -2,7 +2,28 @@
 
 # SMS Gateway
 
+**English** | [Español](README.es.md)
+
 A self-hosted SMS gateway that provides a WebUI and REST API for sending and receiving SMS messages via a USB GSM modem. Built with Go and React, packaged as a single binary.
+
+![Conversations view](docs/images/screenshots/en/chats.png)
+
+## Contents
+
+- [Why SMS Gateway?](#why-sms-gateway)
+- [Features](#features)
+- [Hardware Requirements](#hardware-requirements)
+- [Screenshots](#screenshots)
+- [Quick Start](#quick-start)
+- [Default Login](#default-login)
+- [Web UI](#web-ui)
+- [OpenClaw Integration](#openclaw-integration)
+- [Configuration](#configuration)
+- [CLI Commands](#cli-commands)
+- [API](#api)
+- [Webhooks](#webhooks)
+- [Development](#development)
+- [License](#license)
 
 ## Why SMS Gateway?
 
@@ -47,17 +68,42 @@ off a runbook.
 
 ## Features
 
+**Messaging**
+
 - Send and receive SMS messages through a USB GSM modem
+- Chat-style **Messages** view: messages grouped into conversations by phone number, with unread badges, search by name, number or text, day separators, delivery status, retry for failed sends and history paging
+- Long messages (up to 918 characters) are sent as concatenated SMS in PDU mode, so the phone shows them as a single message; non-GSM text (emoji, accents outside the GSM alphabet) is encoded as UCS-2 automatically
+- International phone input: the `+` is added for you, numbers are formatted as you type and the country is detected from the calling code (flag and name)
+- Recipients must be in international E.164 format (`+` and country code) or a 3-6 digit short code, so every conversation stores numbers the same way
+- **Contacts**: give phone numbers a display name, edit it inline from the conversation header, and manage all names from the Contacts page
+- Selectable message text and clickable `http(s)` links in message bodies
+- Background activity watcher: one lightweight poll keeps the unread badge, dashboard, conversation list and open thread up to date, and shows the unread count in the browser tab title
+
+**Administration**
+
 - REST API with JWT and API key authentication
-- React web interface with dashboard, inbox, outbox, and message management
-- API key management for programmatic access
+- API key management for programmatic access (deactivate or delete keys)
 - Signed webhooks for real-time notifications on received, sent and failed messages
-- User management with admin roles
+- User management with admin roles; admins can delete non-admin users (admin accounts are protected)
+- **Modem Test** page with modem status, signal strength and an **AT console**: autocomplete, a built-in AT command reference (V.250, 3GPP TS 27.007/27.005), plain-language decoding of responses, quick commands, a persistent terminal-style log, and confirmation for risky commands
+- Login throttling and a forced password change for the generated admin account
+
+**Web UI**
+
+- Responsive React interface that works on phones, tablets and desktops
+- English and Spanish translations, with automatic detection from the browser language
+- Light, dark and system themes
+- Collapsible and resizable navigation sidebar; a **Preferences** panel groups language and theme
+- In-app confirmation dialogs for destructive actions
+
+**Deployment**
+
 - Health check endpoint for monitoring
 - SQLite (default) or PostgreSQL database
 - Interactive Swagger API documentation at `/swagger/`
 - Single binary deployment (frontend embedded via `go:embed`)
 - Cross-platform: Linux x86_64, macOS ARM64, Raspberry Pi
+- Docker image published to GHCR
 
 ## Hardware Requirements
 
@@ -79,18 +125,67 @@ Any SIM card with an active SMS plan will work. We use [Tello](https://tello.com
 
 ## Screenshots
 
-![Screenshot 1](docs/images/screenshot01.png)
-![Screenshot 2](docs/images/screenshot02.png)
-![Screenshot 3](docs/images/screenshot03.png)
-![Screenshot 4](docs/images/screenshot04.png)
-![Screenshot 5](docs/images/screenshot05.png)
-![Screenshot 6](docs/images/screenshot06.png)
-![Screenshot 7](docs/images/screenshot07.png)
-![Screenshot 8](docs/images/screenshot08.png)
-![Screenshot 9](docs/images/screenshot09.png)
-![Screenshot 10](docs/images/screenshot10.png)
-![Screenshot 11](docs/images/screenshot11.png)
-![Screenshot 12](docs/images/screenshot12.png)
+Screenshots of the Spanish interface are in the [Spanish README](README.es.md#capturas-de-pantalla).
+
+### Dashboard
+
+Modem status, signal, message totals, quick send and recent messages.
+
+![Dashboard](docs/images/screenshots/en/dashboard.png)
+
+### Messages
+
+Conversations on the left, the open thread on the right. Inbound and outbound messages, delivery status, links and contact names.
+
+![Messages](docs/images/screenshots/en/chats.png)
+
+### New message
+
+International phone input with country detection and number validation.
+
+![New message](docs/images/screenshots/en/new-message.png)
+
+### Contacts
+
+![Contacts](docs/images/screenshots/en/contacts.png)
+
+### API Keys
+
+![API Keys](docs/images/screenshots/en/api-keys.png)
+
+### Webhooks
+
+![Webhooks](docs/images/screenshots/en/webhooks.png)
+
+### Users
+
+![Users](docs/images/screenshots/en/users.png)
+
+### Modem Test and AT console
+
+![Modem Test](docs/images/screenshots/en/modem.png)
+
+### Preferences
+
+Language (Auto, English, Spanish) and theme (Light, Dark, System).
+
+![Preferences](docs/images/screenshots/en/preferences.png)
+
+### Dark theme
+
+| Dashboard | Messages |
+|-----------|----------|
+| ![Dashboard, dark theme](docs/images/screenshots/en/dashboard-dark.png) | ![Messages, dark theme](docs/images/screenshots/en/chats-dark.png) |
+
+### Mobile
+
+| Dashboard | Conversations | Thread |
+|-----------|---------------|--------|
+| ![Mobile dashboard](docs/images/screenshots/en/mobile-dashboard.png) | ![Mobile conversations](docs/images/screenshots/en/mobile-chats.png) | ![Mobile thread](docs/images/screenshots/en/mobile-thread.png) |
+
+### Sign in
+
+![Sign in](docs/images/screenshots/en/login.png)
 
 ## Quick Start
 
@@ -145,6 +240,8 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now sms-gateway
 ```
 
+See [`deploy/systemd/`](deploy/systemd/) for the unit file and an example configuration.
+
 ### Manual Install: Pre-built Binary
 
 ```bash
@@ -179,7 +276,7 @@ docker compose pull
 docker compose up -d
 ```
 
-The included `docker-compose.yml` pulls the published GHCR image by default, passes configuration through environment variables, persists app state in a named volume mounted at `/opt/sms-gateway`, and exposes the host `/dev` tree with a `ttyUSB` device cgroup rule so the container can open `/dev/ttyUSB*`.
+The included [`docker-compose.yml`](docker-compose.yml) pulls the published GHCR image by default, passes configuration through environment variables, persists app state in a named volume mounted at `/opt/sms-gateway`, and exposes the host `/dev` tree with a `ttyUSB` device cgroup rule so the container can open `/dev/ttyUSB*`.
 
 Minimal example:
 
@@ -213,16 +310,41 @@ Installs from earlier releases whose admin still has the old default password `a
 
 ## Web UI
 
-Open the WebUI at `http://localhost:5174` and sign in with an admin account.
+Open the WebUI at `http://localhost:5174` and sign in with an admin account. The sidebar groups pages into **Messaging** and **Settings**.
 
-- Use **Send SMS** to send a test message.
-- Use **Inbox** to confirm inbound messages are being received.
-- Use **Outbox** to confirm delivery records.
-- Use **API Keys** to create keys for external integrations (for example, OpenClaw).
+| Page | What it does |
+|------|--------------|
+| **Dashboard** | Modem status, signal strength, sent/received totals, a quick send form and the most recent messages. |
+| **Messages** | All conversations, grouped by phone number. Open one to read and reply, rename the contact, copy the number or delete the conversation. **New message** starts a conversation with any number. Failed sends can be retried from the thread. |
+| **Contacts** | Search, create, rename and delete contact names. Deleting a contact keeps its messages. |
+| **API Keys** | Create keys for external integrations (for example, OpenClaw), then deactivate or delete them. The key is shown only once. |
+| **Webhooks** | Admin only. Create, edit, pause, resume and delete webhooks. See [Webhooks](#webhooks). |
+| **Users** | Admin only. Create users, grant admin rights and delete non-admin users. |
+| **Modem Test** | Admin only. Modem status, signal and the AT console. |
+
+Tips:
+
+- Use **Messages → New message** or the dashboard quick send to send a test message; numbers need the country code (e.g. `+1 555 123 4567`).
+- The unread count appears on the **Messages** nav item, on the mobile menu button and in the browser tab title.
+- Open **Preferences** (the sliders icon next to your user in the sidebar footer) to switch language and theme. The sign-in page has the same controls in its top-right corner. Your choice is remembered in the browser.
+- On desktop, collapse the sidebar to an icon rail with the button in its header, or drag its right edge to resize it (double-click the edge to reset). On phones the sidebar becomes a drawer.
+- Old `/inbox`, `/outbox` and `/send` links redirect to the Messages view.
+
+### AT console
+
+The **Modem Test** page includes a console for raw AT commands:
+
+- Type a command or search by name (e.g. `csq` or `signal`); suggestions come from a built-in command reference plus the commands your modem reports through `AT+CLAC`.
+- A reference card below the input shows the syntax, parameters and response format of the selected command.
+- Responses for common commands and error codes are decoded into plain language (e.g. signal in dBm, operator and network type).
+- Quick buttons run read-only commands such as `ATI`, `AT+CSQ`, `AT+CREG?` and `AT+COPS?`.
+- `Tab` completes, the arrow keys browse suggestions or previous commands, `Esc` closes the list.
+- The log is kept in the browser (last 200 entries) and each entry can be run again.
+- Commands are validated server-side: one line of printable ASCII starting with `AT`. Dangerous commands (radio off, factory reset, SMS deletion, PIN entry, ...) and commands that are not recognised ask for confirmation before they are sent.
 
 ## OpenClaw Integration
 
-Use the bundled OpenClaw skill and scripts in `openclaw/` to send and receive SMS from OpenClaw.
+Use the bundled OpenClaw skill and scripts in [`openclaw/`](openclaw/) to send and receive SMS from OpenClaw.
 
 1. Copy the OpenClaw skill files into your OpenClaw workspace:
 
@@ -281,6 +403,8 @@ Configuration is done via a config file, CLI flags, or environment variables.
 | `--jwt-secret` | `JWT_SECRET` | (required) | JWT signing secret, at least 32 characters. Dev mode generates a random one when unset |
 | `--dev-mode` | `DEV_MODE` | `false` | Enable dev mode (mock modem, CORS) |
 
+An example config file is in [`deploy/systemd/sms-gateway.conf`](deploy/systemd/sms-gateway.conf).
+
 ## CLI Commands
 
 ```bash
@@ -303,37 +427,69 @@ sms-gateway apikey revoke --id <uuid>
 
 ## API
 
-Interactive API documentation is available at `/swagger/index.html` when the server is running.
+Interactive API documentation is available at `/swagger/index.html` when the server is running. The generated spec lives in [`src/docs/`](src/docs/).
 
 ### Authentication
 
-**JWT (WebUI):** POST to `/api/v1/auth/login` with username/password to get a token.
+**JWT (WebUI):** POST to `/api/v1/auth/login` with username/password to get a token, then send `Authorization: Bearer <token>`.
 
 **API Key:** Include `X-API-Key: <key>` header in requests.
 
-### Key Endpoints
+### Sending a message
+
+```bash
+curl -X POST http://localhost:5174/api/v1/sms/send \
+  -H "X-API-Key: $SMS_GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"to": "+15551234567", "body": "Disk usage on nas-01 is above 90%"}'
+```
+
+`to` must be an international number with `+` and country code (spaces, dashes, dots and parentheses are ignored) or a 3-6 digit short code; other numbers are rejected with `400`. `body` can be up to 918 characters and is split into concatenated parts automatically.
+
+### Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/v1/health` | None | Health check |
 | POST | `/api/v1/auth/login` | None | Login |
+| POST | `/api/v1/auth/logout` | JWT | Logout |
+| POST | `/api/v1/auth/change-password` | JWT | Change your password |
 | POST | `/api/v1/sms/send` | JWT or API Key | Send SMS |
-| GET | `/api/v1/sms/inbox` | JWT or API Key | List received messages |
-| GET | `/api/v1/sms/outbox` | JWT or API Key | List sent messages |
+| GET | `/api/v1/sms/inbox` | JWT or API Key | List received messages (`status`, `all`, `limit`, `offset`) |
+| GET | `/api/v1/sms/outbox` | JWT or API Key | List sent messages (`limit`, `offset`) |
+| GET | `/api/v1/sms/stats` | JWT or API Key | Message counts by direction and status |
 | GET | `/api/v1/sms/{id}` | JWT or API Key | Get message by ID |
 | PUT | `/api/v1/sms/{id}/read` | JWT or API Key | Mark message as read |
+| PUT | `/api/v1/sms/{id}/unread` | JWT or API Key | Mark message as unread |
 | DELETE | `/api/v1/sms/{id}` | JWT or API Key | Delete a message |
+| GET | `/api/v1/sms/conversations` | JWT or API Key | List conversations (`q`, `limit`, `offset`) |
+| GET | `/api/v1/sms/conversations/messages` | JWT or API Key | Messages of one conversation (`phone`, `limit`, `before_id`) |
+| PUT | `/api/v1/sms/conversations/read` | JWT or API Key | Mark a conversation as read (`phone`) |
+| DELETE | `/api/v1/sms/conversations` | JWT or API Key | Delete a conversation (`phone`) |
+| GET | `/api/v1/contacts` | JWT or API Key | List contacts (`q`, `limit`, `offset`) |
+| PUT | `/api/v1/contacts` | JWT or API Key | Create or rename a contact (`phone`, body `{"name": "..."}`) |
+| DELETE | `/api/v1/contacts` | JWT or API Key | Delete a contact name (`phone`); messages are kept |
 | GET | `/api/v1/modem/status` | JWT or API Key | Modem status |
 | GET | `/api/v1/modem/signal` | JWT or API Key | Signal strength |
-| POST | `/api/v1/modem/at` | JWT + Admin | Send raw AT command |
+| POST | `/api/v1/modem/at` | JWT + Admin | Send raw AT command (`{"command": "...", "confirm": false}`) |
+| GET | `/api/v1/modem/at/commands` | JWT + Admin | AT command reference and commands supported by the modem |
 | GET | `/api/v1/apikeys` | JWT | List API keys |
 | POST | `/api/v1/apikeys` | JWT | Create API key |
+| DELETE | `/api/v1/apikeys/{id}` | JWT | Deactivate API key |
+| DELETE | `/api/v1/apikeys/{id}/delete` | JWT | Delete API key |
 | GET | `/api/v1/users` | JWT + Admin | List users |
 | POST | `/api/v1/users` | JWT + Admin | Create user |
+| DELETE | `/api/v1/users/{id}` | JWT + Admin | Delete a non-admin user |
 | GET | `/api/v1/webhooks` | JWT + Admin | List webhooks |
 | POST | `/api/v1/webhooks` | JWT + Admin | Create webhook |
 | PUT | `/api/v1/webhooks/{id}` | JWT + Admin | Update, pause or resume a webhook |
 | DELETE | `/api/v1/webhooks/{id}` | JWT + Admin | Delete webhook |
+
+Notes:
+
+- Endpoints that take `phone` read it from the query string, URL-encoded (`?phone=%2B15551234567`).
+- `POST /api/v1/modem/at` answers `409` with a warning for dangerous or unrecognised commands; resend with `"confirm": true` to run them. Read (`?`) and test (`=?`) forms are always allowed.
+- Deleting a user also deletes their API keys; messages sent with those keys are kept. Admin accounts cannot be deleted.
 
 ## Webhooks
 
@@ -425,7 +581,7 @@ function verifyWebhook(secret, headers, rawBody) {
 
 ## Development
 
-Before contributing, review `CONTRIBUTING.md` for branch naming, conventional commit requirements, hook setup (`just init`), and pull request expectations.
+Before contributing, review [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch naming, conventional commit requirements, hook setup (`just init`), and pull request expectations.
 
 ### Prerequisites
 
@@ -445,23 +601,37 @@ just swagger        # Regenerate Swagger docs
 just migrate-new X  # Create new migration named X
 ```
 
+`just dev` runs the API with a mock modem on port `5174` and the Vite dev server (default `http://localhost:5173`), which proxies `/api` and `/swagger` to the API.
+
+### Translations
+
+UI strings live in [`src/web/src/locales/`](src/web/src/locales/): [`en.ts`](src/web/src/locales/en.ts) is the source dictionary and [`es.ts`](src/web/src/locales/es.ts) must define the same keys. To add a language, add a dictionary there and register it in [`src/web/src/lib/i18n.tsx`](src/web/src/lib/i18n.tsx).
+
 ### Project Structure
 
 ```
 src/
   cmd/sms-gateway/    # CLI entrypoint
   internal/
-    api/              # HTTP handlers, router, middleware
+    api/              # HTTP handlers, router, middleware, login throttling
     auth/             # JWT, bcrypt, API key generation
     config/           # Configuration loading
     database/         # Database connection, repository, migrations
     models/           # Domain types and request/response models
-    modem/            # Serial/AT modem interface and mock
+    modem/            # Serial/AT modem interface, PDU encoding, AT catalog and mock
+    webhook/          # Signed webhook delivery and retries
   web/                # React frontend (Vite + TypeScript + Tailwind)
+    src/components/   # Layout, shared UI, chat and AT console components
+    src/lib/          # API client, auth, i18n, theme and hooks
+    src/locales/      # English and Spanish dictionaries
+    src/pages/        # Dashboard, Chats, Contacts, API Keys, Webhooks, Users, Modem Test
   migrations/         # Goose SQL migrations
   docs/               # Generated Swagger docs
+deploy/               # systemd unit and example config
+openclaw/             # OpenClaw skill and scripts
+docs/images/          # README images and screenshots
 ```
 
 ## License
 
-GPL-3.0
+GPL-3.0. See [`LICENSE`](LICENSE).
