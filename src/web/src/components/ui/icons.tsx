@@ -66,6 +66,25 @@ export const TrashIcon = icon(
 export const ChevronDownIcon = icon(<path d="m6 9 6 6 6-6" />);
 export const ArrowLeftIcon = icon(<path d="M19 12H5M12 19l-7-7 7-7" />);
 export const RefreshIcon = icon(<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5" />);
+export const GlobeIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+  </>,
+);
+export const SearchIcon = icon(
+  <>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </>,
+);
+export const ClockIcon = icon(
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </>,
+);
+export const ArrowDownIcon = icon(<path d="M12 5v14M19 12l-7 7-7-7" />);
 export const PlusIcon = icon(<path d="M12 5v14M5 12h14" />);
 export const CopyIcon = icon(
   <>

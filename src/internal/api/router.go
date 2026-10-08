@@ -52,6 +52,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 	modemHandler := NewModemHandler(m)
 	userHandler := NewUserHandler(repo)
 	webhookHandler := NewWebhookHandler(repo)
+	contactHandler := NewContactHandler(repo)
 	healthHandler := NewHealthHandler(repo, m)
 
 	// Auth middleware shortcuts.
@@ -70,6 +71,15 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 		r.Get("/api/v1/sms/inbox", smsHandler.HandleGetInbox)
 		r.Get("/api/v1/sms/outbox", smsHandler.HandleGetOutbox)
 		r.Get("/api/v1/sms/stats", smsHandler.HandleMessageStats)
+		// chi matches these static segments ahead of /sms/{id}.
+		r.Get("/api/v1/sms/conversations", smsHandler.HandleListConversations)
+		r.Delete("/api/v1/sms/conversations", smsHandler.HandleDeleteConversation)
+		r.Get("/api/v1/sms/conversations/messages", smsHandler.HandleGetConversationMessages)
+		r.Put("/api/v1/sms/conversations/read", smsHandler.HandleMarkConversationRead)
+
+		r.Get("/api/v1/contacts", contactHandler.HandleListContacts)
+		r.Put("/api/v1/contacts", contactHandler.HandleSaveContact)
+		r.Delete("/api/v1/contacts", contactHandler.HandleDeleteContact)
 		r.Get("/api/v1/sms/{id}", smsHandler.HandleGetMessage)
 		r.Put("/api/v1/sms/{id}/read", smsHandler.HandleMarkRead)
 		r.Put("/api/v1/sms/{id}/unread", smsHandler.HandleMarkUnread)

@@ -1,8 +1,10 @@
 package modem
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -253,9 +255,22 @@ func encodeSubmitPDUs(enc *sms.Encoder, to, body string) ([]submitPDU, error) {
 	return parts, nil
 }
 
-// maxRecipientDigits bounds a recipient number. E.164 allows 15 digits; the
-// slack covers national prefixes.
-const maxRecipientDigits = 20
+// recipientPattern is the single accepted recipient format, so the API, the
+// WebUI and stored messages always agree on how a number is written:
+//
+//   - E.164 international numbers: "+", a country code that cannot start with
+//     0, and 7–15 digits in total (e.g. +15551234567). Requiring the "+" keeps
+//     outbound numbers in the same form the modem reports for inbound ones, so
+//     both directions land in one conversation.
+//   - Short codes: 3–6 digits with no "+" (e.g. 7726), which have no country
+//     code. Six digits is the cutoff so a local number (7+ digits) missing its
+//     country code is rejected rather than mistaken for a short code.
+//
+// The WebUI mirrors this in isDialable (src/web/src/lib/messages.ts).
+var recipientPattern = regexp.MustCompile(`^(\+[1-9][0-9]{6,14}|[0-9]{3,6})$`)
+
+// ErrInvalidRecipient explains the accepted recipient format.
+var ErrInvalidRecipient = errors.New("recipient must be an international number with + and country code (e.g. +15551234567) or a 3-6 digit short code")
 
 // ValidateSMS rejects input that would escape the AT+CMGS command.
 //
@@ -265,9 +280,8 @@ const maxRecipientDigits = 20
 // of the input to the modem as AT commands, so every SMS is checked here before
 // it reaches the port.
 func ValidateSMS(to, body string) error {
-	digits := strings.TrimPrefix(to, "+")
-	if digits == "" || len(digits) > maxRecipientDigits || strings.IndexFunc(digits, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
-		return fmt.Errorf("recipient must be a phone number of up to %d digits with an optional leading +", maxRecipientDigits)
+	if !recipientPattern.MatchString(to) {
+		return ErrInvalidRecipient
 	}
 	if n := len([]rune(body)); n > maxBodyRunes {
 		return fmt.Errorf("body is %d characters long; the maximum is %d", n, maxBodyRunes)

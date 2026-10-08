@@ -1,15 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 
-export interface Message {
-  id: string;
-  direction: string;
-  phone_number: string;
-  body: string;
-  status: string;
-  created_at: string;
-}
-
 export const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
 export const DEFAULT_PAGE_SIZE = 50;
 

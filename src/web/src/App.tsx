@@ -1,18 +1,20 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import Layout from '@/components/Layout';
-import Dashboard from '@/pages/Dashboard';
+import { MessageActivityProvider } from '@/lib/messageActivity';
 import Login from '@/pages/Login';
 import ChangePassword from '@/pages/ChangePassword';
-import SendSMS from '@/pages/SendSMS';
-import Inbox from '@/pages/Inbox';
-import Outbox from '@/pages/Outbox';
-import MessageDetail from '@/pages/MessageDetail';
+import MessageRedirect from '@/pages/MessageRedirect';
 import APIKeys from '@/pages/APIKeys';
 import Webhooks from '@/pages/Webhooks';
 import Users from '@/pages/Users';
 import ModemTest from '@/pages/ModemTest';
-import type { ReactNode } from 'react';
+import { lazy, type ReactNode } from 'react';
+
+// The phone-number metadata (libphonenumber-js) is only needed by these two
+// pages, so they load on demand and keep it out of the initial bundle.
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Chats = lazy(() => import('@/pages/Chats'));
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, mustChangePassword } = useAuth();
@@ -33,15 +35,21 @@ export default function App() {
       <Route
         element={
           <ProtectedRoute>
-            <Layout />
+            <MessageActivityProvider>
+              <Layout />
+            </MessageActivityProvider>
           </ProtectedRoute>
         }
       >
         <Route path="/" element={<Dashboard />} />
-        <Route path="/send" element={<SendSMS />} />
-        <Route path="/inbox" element={<Inbox />} />
-        <Route path="/outbox" element={<Outbox />} />
-        <Route path="/messages/:id" element={<MessageDetail />} />
+        <Route path="/chats" element={<Chats />} />
+        <Route path="/chats/new" element={<Chats />} />
+        <Route path="/chats/:phone" element={<Chats />} />
+        {/* Pre-chat pages, kept so bookmarks and old links still resolve. */}
+        <Route path="/inbox" element={<Navigate to="/chats" replace />} />
+        <Route path="/outbox" element={<Navigate to="/chats" replace />} />
+        <Route path="/send" element={<Navigate to="/chats/new" replace />} />
+        <Route path="/messages/:id" element={<MessageRedirect />} />
         <Route path="/apikeys" element={<APIKeys />} />
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/users" element={<Users />} />

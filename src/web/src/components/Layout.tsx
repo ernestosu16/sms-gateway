@@ -1,18 +1,18 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/cn';
-import { SIDEBAR_MAX, SIDEBAR_MIN, useResizableSidebar } from '@/lib/useResizableSidebar';
+import { useMessageStats } from '@/lib/messageActivity';
+import { useResizablePanel } from '@/lib/useResizablePanel';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import {
   DashboardIcon,
-  InboxIcon,
   KeyIcon,
+  LoadingState,
   LogoutIcon,
   MenuIcon,
   MessageIcon,
-  OutboxIcon,
-  SendIcon,
+  ResizeHandle,
   SidebarIcon,
   SignalIcon,
   UsersIcon,
@@ -25,9 +25,7 @@ const navSections = [
     title: 'Messaging',
     items: [
       { to: '/', label: 'Dashboard', Icon: DashboardIcon },
-      { to: '/send', label: 'Send SMS', Icon: SendIcon },
-      { to: '/inbox', label: 'Inbox', Icon: InboxIcon },
-      { to: '/outbox', label: 'Outbox', Icon: OutboxIcon },
+      { to: '/chats', label: 'Messages', Icon: MessageIcon },
     ],
   },
   {
@@ -43,12 +41,16 @@ const navSections = [
 
 /** Section name for the compact mobile header. */
 function sectionTitle(pathname: string): string {
-  if (pathname.startsWith('/messages/')) return 'Message';
+  if (pathname.startsWith('/chats') || pathname.startsWith('/messages/')) return 'Messages';
   for (const section of navSections) {
     const item = section.items.find((i) => i.to === pathname);
     if (item) return item.label;
   }
   return 'SMS Gateway';
+}
+
+function formatUnread(unread: number): string {
+  return unread > 99 ? '99+' : String(unread);
 }
 
 function Brand() {
@@ -69,7 +71,17 @@ export default function Layout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const sidebar = useResizableSidebar();
+  const sidebar = useResizablePanel({
+    storageKey: 'sms-gateway.sidebar',
+    min: 200,
+    max: 400,
+    defaultWidth: 256,
+    collapsedWidth: 72,
+  });
+  const unread = useMessageStats()?.unread ?? 0;
+  // The chat manages its own scrolling panes, so it fills the main area edge to
+  // edge instead of sitting in the padded, scrolling page container.
+  const fullBleed = pathname.startsWith('/chats');
   // Collapsing and resizing only apply from lg up; on phones the sidebar is a
   // full-width drawer. Every collapsed style below is therefore lg: prefixed.
   const rail = sidebar.collapsed;
@@ -178,8 +190,28 @@ export default function Layout() {
                       )
                     }
                   >
-                    <Icon className="h-[18px] w-[18px] shrink-0" />
-                    <span className={cn('truncate', rail && 'lg:sr-only')}>{label}</span>
+                    <span className="relative shrink-0">
+                      <Icon className="h-[18px] w-[18px]" />
+                      {/* On the icon rail the count has no room, so a dot stands in for it. */}
+                      {rail && to === '/chats' && unread > 0 && (
+                        <span
+                          className="absolute -top-1 -right-1 hidden h-2 w-2 rounded-full bg-primary ring-2 ring-sidebar lg:block"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </span>
+                    <span className={cn('flex-1 truncate', rail && 'lg:sr-only')}>{label}</span>
+                    {to === '/chats' && unread > 0 && (
+                      <span
+                        className={cn(
+                          'inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-fg',
+                          rail && 'lg:sr-only',
+                        )}
+                      >
+                        {formatUnread(unread)}
+                        <span className="sr-only"> unread</span>
+                      </span>
+                    )}
                   </NavLink>
                 ))}
               </div>
@@ -225,27 +257,13 @@ export default function Layout() {
           )}
         </div>
 
-        {/* Drag handle on the right edge: drag to resize, past the minimum to
-            collapse, double-click to reset; arrow keys work when focused. */}
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize navigation"
-          aria-valuemin={SIDEBAR_MIN}
-          aria-valuemax={SIDEBAR_MAX}
-          aria-valuenow={sidebar.width}
-          tabIndex={0}
-          title="Drag to resize, double-click to reset"
+        {/* Drag to resize, past the minimum to collapse, double-click to reset. */}
+        <ResizeHandle
+          label="Resize navigation"
+          dragging={sidebar.dragging}
           {...sidebar.handleProps}
-          className="group absolute inset-y-0 -right-1.5 z-10 hidden w-3 cursor-col-resize touch-none focus-visible:outline-none lg:block"
-        >
-          <span
-            className={cn(
-              'absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 transition-colors group-hover:bg-primary group-focus-visible:bg-primary',
-              sidebar.dragging && 'bg-primary',
-            )}
-          />
-        </div>
+          className="hidden lg:block"
+        />
       </aside>
 
       {/* Main content */}
@@ -253,20 +271,39 @@ export default function Layout() {
         {/* Mobile header */}
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 lg:hidden">
           <button
-            className="-ml-1.5 rounded-md p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg"
+            className="relative -ml-1.5 rounded-md p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg"
             onClick={() => setSidebarOpen(true)}
-            aria-label="Open navigation"
+            aria-label={unread > 0 ? `Open navigation, ${unread} unread` : 'Open navigation'}
           >
             <MenuIcon />
+            {/* The sidebar badge is hidden in the closed drawer, so phones show it here. */}
+            {unread > 0 && (
+              <span
+                className="absolute -top-0.5 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-semibold text-primary-fg"
+                aria-hidden="true"
+              >
+                {formatUnread(unread)}
+              </span>
+            )}
           </button>
           <span className="truncate text-base font-semibold text-fg">{sectionTitle(pathname)}</span>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-            <Outlet />
-          </div>
-        </main>
+        {fullBleed ? (
+          <main className="min-h-0 flex-1 overflow-hidden">
+            <Suspense fallback={<LoadingState label="Loading…" />}>
+              <Outlet />
+            </Suspense>
+          </main>
+        ) : (
+          <main className="flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+              <Suspense fallback={<LoadingState label="Loading…" />}>
+                <Outlet />
+              </Suspense>
+            </div>
+          </main>
+        )}
       </div>
     </div>
   );

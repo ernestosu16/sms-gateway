@@ -431,6 +431,10 @@ func (r *Repository) CreateMessage(direction models.Direction, phoneNumber, body
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
+	// Normalizing here, the only write path, keeps both modem-received and
+	// API-sent messages groupable into the same conversation.
+	phoneNumber = models.NormalizePhone(phoneNumber)
+
 	_, err := r.db.Exec(
 		`INSERT INTO messages (id, direction, phone_number, body, status, api_key_id, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -628,6 +632,250 @@ func (r *Repository) GetPendingMessages() ([]models.Message, error) {
 	return r.ListMessages(models.DirectionOutbound, &status, ListOptions{})
 }
 
+// --- Conversations ---
+
+// likeEscaper escapes LIKE wildcards so user search text matches literally.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// conversationFilter restricts conversations to those whose number, saved
+// contact name, or any message body contains search. An empty search matches
+// all.
+//
+// It is shared by ListConversations and CountConversations so the page and the
+// total can never disagree.
+func conversationFilter(search string) (string, []any) {
+	if search == "" {
+		return "", nil
+	}
+	pattern := "%" + likeEscaper.Replace(search) + "%"
+	return ` WHERE phone_number IN (
+		SELECT phone_number FROM messages
+		WHERE phone_number LIKE ? ESCAPE '\' OR body LIKE ? ESCAPE '\'
+		UNION
+		SELECT phone_number FROM contacts WHERE name LIKE ? ESCAPE '\'
+	)`, []any{pattern, pattern, pattern}
+}
+
+// qualify prefixes every column in a comma-separated list with table, for
+// queries that join tables sharing column names.
+func qualify(table, columns string) string {
+	parts := strings.Split(columns, ", ")
+	for i, c := range parts {
+		parts[i] = table + "." + c
+	}
+	return strings.Join(parts, ", ")
+}
+
+// ListConversations returns one entry per phone number, newest activity first,
+// each carrying its latest message and message/unread counts.
+func (r *Repository) ListConversations(search string, opts ListOptions) ([]models.Conversation, error) {
+	where, args := conversationFilter(search)
+
+	// Window functions compute the per-number latest message and counts in one
+	// pass; ordering matches the thread index so ROW_NUMBER needs no extra sort.
+	query, args := applyPagination(
+		`SELECT `+qualify("ranked", messageColumns)+`, message_count, unread_count, COALESCE(contacts.name, '') FROM (
+			SELECT `+messageColumns+`,
+				ROW_NUMBER() OVER w AS rn,
+				COUNT(*) OVER p AS message_count,
+				SUM(CASE WHEN direction = 'inbound' AND status = 'received' THEN 1 ELSE 0 END) OVER p AS unread_count
+			FROM messages`+where+`
+			WINDOW p AS (PARTITION BY phone_number),
+			       w AS (PARTITION BY phone_number ORDER BY created_at DESC, id DESC)
+		) ranked
+		LEFT JOIN contacts ON contacts.phone_number = ranked.phone_number
+		WHERE rn = 1
+		ORDER BY ranked.created_at DESC, ranked.id DESC`,
+		args, opts,
+	)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var conversations []models.Conversation
+	for rows.Next() {
+		var c models.Conversation
+		m, err := scanMessageWith(rows, &c.MessageCount, &c.UnreadCount, &c.ContactName)
+		if err != nil {
+			return nil, err
+		}
+		c.PhoneNumber = m.PhoneNumber
+		c.LastMessage = *m
+		conversations = append(conversations, c)
+	}
+	return conversations, rows.Err()
+}
+
+// CountConversations returns how many conversations match search, ignoring
+// pagination.
+func (r *Repository) CountConversations(search string) (int, error) {
+	where, args := conversationFilter(search)
+
+	var total int
+	if err := r.db.QueryRow(`SELECT COUNT(DISTINCT phone_number) FROM messages`+where, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("counting conversations: %w", err)
+	}
+	return total, nil
+}
+
+// ListThread returns messages exchanged with phoneNumber, newest first.
+//
+// Paging uses a keyset cursor rather than OFFSET: a chat keeps receiving new
+// messages at the top of this ordering, which would shift every offset and make
+// "load older" repeat rows. When before is non-nil only messages strictly older
+// than it are returned. A zero limit returns everything.
+func (r *Repository) ListThread(phoneNumber string, before *models.Message, limit int) ([]models.Message, error) {
+	query := `SELECT ` + messageColumns + ` FROM messages WHERE phone_number = ?`
+	args := []any{models.NormalizePhone(phoneNumber)}
+	if before != nil {
+		createdAt := before.CreatedAt.UTC().Format(time.RFC3339)
+		query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`
+		args = append(args, createdAt, createdAt, before.ID)
+	}
+	query, args = applyPagination(query+` ORDER BY created_at DESC, id DESC`, args, ListOptions{Limit: limit})
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing thread: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		m, err := scanMessageRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, *m)
+	}
+	return messages, rows.Err()
+}
+
+// CountThread returns the total number of messages exchanged with phoneNumber.
+func (r *Repository) CountThread(phoneNumber string) (int, error) {
+	var total int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE phone_number = ?`, models.NormalizePhone(phoneNumber)).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("counting thread: %w", err)
+	}
+	return total, nil
+}
+
+// MarkConversationRead marks every unread inbound message from phoneNumber as
+// read and returns how many changed.
+func (r *Repository) MarkConversationRead(phoneNumber string) (int64, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := r.db.Exec(
+		`UPDATE messages SET status = ?, updated_at = ? WHERE phone_number = ? AND direction = ? AND status = ?`,
+		string(models.StatusRead), now, models.NormalizePhone(phoneNumber), string(models.DirectionInbound), string(models.StatusReceived),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("marking conversation as read: %w", err)
+	}
+	return result.RowsAffected()
+}
+
+// DeleteConversation deletes every message exchanged with phoneNumber and
+// returns how many were removed.
+func (r *Repository) DeleteConversation(phoneNumber string) (int64, error) {
+	result, err := r.db.Exec(`DELETE FROM messages WHERE phone_number = ?`, models.NormalizePhone(phoneNumber))
+	if err != nil {
+		return 0, fmt.Errorf("deleting conversation: %w", err)
+	}
+	return result.RowsAffected()
+}
+
+// --- Contacts ---
+
+// contactColumns is the column list shared by every contact SELECT.
+const contactColumns = `phone_number, name, created_at, updated_at`
+
+// SaveContact creates or renames the contact for phoneNumber.
+func (r *Repository) SaveContact(phoneNumber, name string) (*models.Contact, error) {
+	phoneNumber = models.NormalizePhone(phoneNumber)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.Exec(
+		`INSERT INTO contacts (phone_number, name, created_at, updated_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT (phone_number) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
+		phoneNumber, name, now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("saving contact: %w", err)
+	}
+	return r.GetContact(phoneNumber)
+}
+
+// GetContact returns the contact for phoneNumber. The error wraps
+// sql.ErrNoRows when the number has no saved name.
+func (r *Repository) GetContact(phoneNumber string) (*models.Contact, error) {
+	row := r.db.QueryRow(`SELECT `+contactColumns+` FROM contacts WHERE phone_number = ?`, models.NormalizePhone(phoneNumber))
+	return scanContact(row)
+}
+
+// contactFilter matches contacts whose name or number contains search, shared
+// by ListContacts and CountContacts.
+func contactFilter(search string) (string, []any) {
+	if search == "" {
+		return "", nil
+	}
+	pattern := "%" + likeEscaper.Replace(search) + "%"
+	return ` WHERE name LIKE ? ESCAPE '\' OR phone_number LIKE ? ESCAPE '\'`, []any{pattern, pattern}
+}
+
+// ListContacts returns contacts matching search, ordered by name.
+func (r *Repository) ListContacts(search string, opts ListOptions) ([]models.Contact, error) {
+	where, args := contactFilter(search)
+	query, args := applyPagination(
+		`SELECT `+contactColumns+` FROM contacts`+where+` ORDER BY LOWER(name), phone_number`,
+		args, opts,
+	)
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing contacts: %w", err)
+	}
+	defer rows.Close()
+
+	var contacts []models.Contact
+	for rows.Next() {
+		c, err := scanContact(rows)
+		if err != nil {
+			return nil, err
+		}
+		contacts = append(contacts, *c)
+	}
+	return contacts, rows.Err()
+}
+
+// CountContacts returns how many contacts match search, ignoring pagination.
+func (r *Repository) CountContacts(search string) (int, error) {
+	where, args := contactFilter(search)
+	var total int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM contacts`+where, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("counting contacts: %w", err)
+	}
+	return total, nil
+}
+
+// DeleteContact removes the saved name for phoneNumber; its messages are kept.
+// The error wraps sql.ErrNoRows when the number has no saved name.
+func (r *Repository) DeleteContact(phoneNumber string) error {
+	result, err := r.db.Exec(`DELETE FROM contacts WHERE phone_number = ?`, models.NormalizePhone(phoneNumber))
+	if err != nil {
+		return fmt.Errorf("deleting contact: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deleting contact: %w", sql.ErrNoRows)
+	}
+	return nil
+}
+
 // --- Webhooks ---
 
 // webhookColumns is the column list shared by every webhook SELECT.
@@ -791,10 +1039,17 @@ func scanAPIKeyRows(rows *sql.Rows) (*models.APIKey, error) {
 }
 
 func scanMessage(s scannable) (*models.Message, error) {
+	return scanMessageWith(s)
+}
+
+// scanMessageWith scans messageColumns followed by any extra columns a query
+// appends, such as the conversation counts.
+func scanMessageWith(s scannable, extra ...any) (*models.Message, error) {
 	var m models.Message
 	var direction, status string
 	var createdAt, updatedAt string
-	err := s.Scan(&m.ID, &direction, &m.PhoneNumber, &m.Body, &status, &m.APIKeyID, &m.ModemResponse, &m.ErrorMessage, &createdAt, &updatedAt)
+	dest := append([]any{&m.ID, &direction, &m.PhoneNumber, &m.Body, &status, &m.APIKeyID, &m.ModemResponse, &m.ErrorMessage, &createdAt, &updatedAt}, extra...)
+	err := s.Scan(dest...)
 	if err != nil {
 		return nil, fmt.Errorf("scanning message: %w", err)
 	}
@@ -803,6 +1058,17 @@ func scanMessage(s scannable) (*models.Message, error) {
 	m.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	m.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 	return &m, nil
+}
+
+func scanContact(s scannable) (*models.Contact, error) {
+	var c models.Contact
+	var createdAt, updatedAt string
+	if err := s.Scan(&c.PhoneNumber, &c.Name, &createdAt, &updatedAt); err != nil {
+		return nil, fmt.Errorf("scanning contact: %w", err)
+	}
+	c.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	c.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return &c, nil
 }
 
 func scanMessageRows(rows *sql.Rows) (*models.Message, error) {

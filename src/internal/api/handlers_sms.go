@@ -98,6 +98,9 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Send to the same normalized number that gets stored, so the modem and the
+	// conversation view agree on who the message went to.
+	req.To = models.NormalizePhone(req.To)
 	if req.To == "" || req.Body == "" {
 		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "to and body are required"})
 		return
@@ -370,4 +373,161 @@ func (h *SMSHandler) HandleGetMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, msg)
+}
+
+// conversationPhone reads the required phone query parameter used by the
+// conversation endpoints. The number travels as a query parameter rather than a
+// path segment because a leading "+" is awkward to round-trip through a path.
+func conversationPhone(w http.ResponseWriter, r *http.Request) (string, bool) {
+	phone := models.NormalizePhone(r.URL.Query().Get("phone"))
+	if phone == "" {
+		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "phone is required"})
+		return "", false
+	}
+	return phone, true
+}
+
+// HandleListConversations returns one entry per phone number.
+//
+// @Summary      List conversations
+// @Description  Returns inbound and outbound messages grouped by phone number, most recent activity first. Each entry carries the latest message and message/unread counts.
+// @Tags         SMS
+// @Produce      json
+// @Param        q       query     string  false  "Only conversations with a message whose number or body contains this text"
+// @Param        limit   query     int     false  "Maximum conversations to return (max 500). Omit to return all."
+// @Param        offset  query     int     false  "Conversations to skip. Only applied together with limit."
+// @Success      200     {array}   models.Conversation  "Total matching conversations is returned in the X-Total-Count header"
+// @Failure      400     {object}  models.ErrorResponse
+// @Failure      500     {object}  models.ErrorResponse
+// @Security     BearerAuth
+// @Security     ApiKeyAuth
+// @Router       /api/v1/sms/conversations [get]
+func (h *SMSHandler) HandleListConversations(w http.ResponseWriter, r *http.Request) {
+	opts, err := parseListOptions(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+	search := r.URL.Query().Get("q")
+
+	conversations, err := h.repo.ListConversations(search, opts)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list conversations"})
+		return
+	}
+
+	total, err := h.repo.CountConversations(search)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count conversations"})
+		return
+	}
+
+	writePage(w, conversations, total)
+}
+
+// HandleGetConversationMessages returns the messages exchanged with one number.
+//
+// @Summary      Get conversation messages
+// @Description  Returns inbound and outbound messages for one phone number, newest first. Page backwards by passing the oldest received message's id as before_id.
+// @Tags         SMS
+// @Produce      json
+// @Param        phone      query     string  true   "Phone number of the conversation"
+// @Param        limit      query     int     false  "Maximum messages to return (max 500). Omit to return all."
+// @Param        before_id  query     string  false  "Only return messages older than this message"
+// @Success      200        {array}   models.Message  "Total messages in the conversation is returned in the X-Total-Count header"
+// @Failure      400        {object}  models.ErrorResponse
+// @Failure      500        {object}  models.ErrorResponse
+// @Security     BearerAuth
+// @Security     ApiKeyAuth
+// @Router       /api/v1/sms/conversations/messages [get]
+func (h *SMSHandler) HandleGetConversationMessages(w http.ResponseWriter, r *http.Request) {
+	phone, ok := conversationPhone(w, r)
+	if !ok {
+		return
+	}
+
+	opts, err := parseListOptions(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	var before *models.Message
+	if beforeID := r.URL.Query().Get("before_id"); beforeID != "" {
+		before, err = h.repo.GetMessage(beforeID)
+		if err != nil || before.PhoneNumber != phone {
+			writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "before_id is not a message in this conversation"})
+			return
+		}
+	}
+
+	messages, err := h.repo.ListThread(phone, before, opts.Limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list messages"})
+		return
+	}
+
+	total, err := h.repo.CountThread(phone)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count messages"})
+		return
+	}
+
+	writePage(w, messages, total)
+}
+
+// HandleMarkConversationRead marks every unread message in a conversation read.
+//
+// @Summary      Mark conversation as read
+// @Description  Marks every unread inbound message from the phone number as read.
+// @Tags         SMS
+// @Produce      json
+// @Param        phone  query     string  true  "Phone number of the conversation"
+// @Success      200    {object}  models.ConversationUpdateResponse
+// @Failure      400    {object}  models.ErrorResponse
+// @Failure      500    {object}  models.ErrorResponse
+// @Security     BearerAuth
+// @Security     ApiKeyAuth
+// @Router       /api/v1/sms/conversations/read [put]
+func (h *SMSHandler) HandleMarkConversationRead(w http.ResponseWriter, r *http.Request) {
+	phone, ok := conversationPhone(w, r)
+	if !ok {
+		return
+	}
+
+	n, err := h.repo.MarkConversationRead(phone)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to mark conversation as read"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, models.ConversationUpdateResponse{Affected: n})
+}
+
+// HandleDeleteConversation deletes every message exchanged with a number.
+//
+// @Summary      Delete conversation
+// @Description  Deletes every inbound and outbound message for the phone number.
+// @Tags         SMS
+// @Produce      json
+// @Param        phone  query     string  true  "Phone number of the conversation"
+// @Success      200    {object}  models.ConversationUpdateResponse
+// @Failure      400    {object}  models.ErrorResponse
+// @Failure      500    {object}  models.ErrorResponse
+// @Security     BearerAuth
+// @Security     ApiKeyAuth
+// @Router       /api/v1/sms/conversations [delete]
+func (h *SMSHandler) HandleDeleteConversation(w http.ResponseWriter, r *http.Request) {
+	phone, ok := conversationPhone(w, r)
+	if !ok {
+		return
+	}
+
+	n, err := h.repo.DeleteConversation(phone)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to delete conversation"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, models.ConversationUpdateResponse{Affected: n})
 }
