@@ -18,7 +18,19 @@ export interface Conversation {
   last_message: Message;
   message_count: number;
   unread_count: number;
+  /** Saved contact name; absent when the number has none. */
+  contact_name?: string;
 }
+
+export interface Contact {
+  phone_number: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Mirrors models.MaxContactNameRunes on the server. */
+export const MAX_CONTACT_NAME = 100;
 
 export interface SendSMSResponse {
   id: string;
@@ -53,16 +65,19 @@ export function chatPath(phone: string): string {
   return `/chats/${encodeURIComponent(phone)}`;
 }
 
-const UNREAD_CHANGED_EVENT = 'sms-gateway:unread-changed';
+const CONVERSATIONS_CHANGED_EVENT = 'sms-gateway:conversations-changed';
 
-/** Tells listeners (the nav badge) that unread counts may have changed. */
-export function notifyUnreadChanged(): void {
-  window.dispatchEvent(new window.Event(UNREAD_CHANGED_EVENT));
+/**
+ * Tells listeners (the conversation list, the nav unread badge) that
+ * conversations changed: messages read, sent or deleted, or a contact renamed.
+ */
+export function notifyConversationsChanged(): void {
+  window.dispatchEvent(new window.Event(CONVERSATIONS_CHANGED_EVENT));
 }
 
-export function onUnreadChanged(listener: () => void): () => void {
-  window.addEventListener(UNREAD_CHANGED_EVENT, listener);
-  return () => window.removeEventListener(UNREAD_CHANGED_EVENT, listener);
+export function onConversationsChanged(listener: () => void): () => void {
+  window.addEventListener(CONVERSATIONS_CHANGED_EVENT, listener);
+  return () => window.removeEventListener(CONVERSATIONS_CHANGED_EVENT, listener);
 }
 
 /** Orders messages oldest first with the same tiebreaker the server uses. */

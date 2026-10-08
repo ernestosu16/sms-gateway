@@ -92,7 +92,7 @@ export default function ConversationList({
             type="search"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search numbers or messages"
+            placeholder="Search names, numbers or messages"
             className="block h-9 w-full rounded-lg border border-border-strong bg-field pr-3 pl-9 text-sm text-fg placeholder:text-fg-subtle focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
           />
         </div>
@@ -124,7 +124,7 @@ export default function ConversationList({
                       active ? 'bg-primary-soft' : 'hover:bg-surface-hover',
                     )}
                   >
-                    <Avatar phone={c.phone_number} />
+                    <Avatar phone={c.phone_number} name={c.contact_name} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
                         <span
@@ -133,7 +133,7 @@ export default function ConversationList({
                             unread ? 'font-semibold' : 'font-medium',
                           )}
                         >
-                          {describePhone(c.phone_number).formatted}
+                          {c.contact_name || describePhone(c.phone_number).formatted}
                         </span>
                         <time
                           dateTime={c.last_message.created_at}

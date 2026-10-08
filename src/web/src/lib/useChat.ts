@@ -3,8 +3,8 @@ import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import {
   compareMessages,
-  notifyUnreadChanged,
-  onUnreadChanged,
+  notifyConversationsChanged,
+  onConversationsChanged,
   type Conversation,
   type Message,
   type SendSMSResponse,
@@ -69,7 +69,7 @@ export function useConversations(search: string) {
 
   // Re-fetch when a thread is read or a message is sent, so badges and ordering
   // update immediately instead of on the next poll.
-  useEffect(() => onUnreadChanged(fetchList), [fetchList]);
+  useEffect(() => onConversationsChanged(fetchList), [fetchList]);
 
   usePolling(fetchList, CHAT_POLL_MS);
 
@@ -144,7 +144,7 @@ export function useThread(phone: string) {
         m.direction === 'inbound' && m.status === 'received' ? { ...m, status: 'read' } : m,
       ),
     );
-    notifyUnreadChanged();
+    notifyConversationsChanged();
   }, [phone]);
 
   const fetchLatest = useCallback(async () => {
@@ -233,7 +233,7 @@ export function useThread(phone: string) {
           const withoutDup = prev.filter((m) => m.id !== confirmed.id);
           return withoutDup.map((m) => (m.id === temp.id ? confirmed : m));
         });
-        notifyUnreadChanged();
+        notifyConversationsChanged();
         return res.data.status !== 'failed';
       } catch (err) {
         // A 400 (e.g. a body over the modem's length limit) means the message

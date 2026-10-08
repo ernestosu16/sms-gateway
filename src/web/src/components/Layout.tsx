@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/cn';
-import { onUnreadChanged } from '@/lib/messages';
+import { onConversationsChanged } from '@/lib/messages';
 import { usePolling } from '@/lib/usePolling';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import {
@@ -64,7 +64,7 @@ function useUnreadCount(): number {
 
   useEffect(() => {
     fetchUnread();
-    return onUnreadChanged(fetchUnread);
+    return onConversationsChanged(fetchUnread);
   }, [fetchUnread]);
   usePolling(fetchUnread, UNREAD_POLL_MS);
 
