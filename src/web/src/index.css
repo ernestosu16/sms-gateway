@@ -4,7 +4,7 @@
 /*
  * Semantic design tokens. Components use these names (bg-surface, text-fg,
  * border-border, bg-primary, ...) instead of raw palette values, so the light
- * theme and the Solarized dark theme are defined once, here, and every view
+ * theme and the dark theme are defined once, here, and every view
  * follows them without per-element dark: overrides.
  */
 @theme {
@@ -58,54 +58,54 @@
   --color-code-fg: #e2e8f0;
 }
 
-/* Solarized dark. */
+/* Neutral dark: near-black surfaces with no blue tint. */
 .dark {
-  --color-app: #002b36;
-  --color-surface: #073642;
-  --color-surface-muted: #002b36;
-  --color-surface-hover: #0a4452;
-  --color-field: #002b36;
-  --color-border: #2f5560;
-  --color-border-strong: #586e75;
+  --color-app: #0b0b0c;
+  --color-surface: #141416;
+  --color-surface-muted: #0f0f11;
+  --color-surface-hover: #1c1c1f;
+  --color-field: #0f0f11;
+  --color-border: #26262a;
+  --color-border-strong: #3a3a40;
 
-  --color-fg: #eee8d5;
-  --color-fg-muted: #93a1a1;
-  --color-fg-subtle: #839496;
+  --color-fg: #ededed;
+  --color-fg-muted: #a1a1aa;
+  --color-fg-subtle: #71717a;
 
-  --color-sidebar: #00212b;
-  --color-sidebar-fg: #93a1a1;
-  --color-sidebar-active: #0a4452;
-  --color-sidebar-active-fg: #fdf6e3;
-  --color-sidebar-border: #073642;
+  --color-sidebar: #09090b;
+  --color-sidebar-fg: #a1a1aa;
+  --color-sidebar-active: #1c1c1f;
+  --color-sidebar-active-fg: #fafafa;
+  --color-sidebar-border: #1c1c1f;
 
-  --color-primary: #268bd2;
-  --color-primary-hover: #2aa5f5;
-  --color-primary-fg: #fdf6e3;
-  --color-primary-soft: #1f3e52;
-  --color-primary-soft-fg: #6cb6e8;
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-primary-fg: #ffffff;
+  --color-primary-soft: #16213a;
+  --color-primary-soft-fg: #93c5fd;
 
-  --color-success: #859900;
-  --color-success-soft: #213a25;
-  --color-success-soft-fg: #a4bd00;
+  --color-success: #22c55e;
+  --color-success-soft: #11261a;
+  --color-success-soft-fg: #4ade80;
 
-  --color-warning: #b58900;
-  --color-warning-soft: #3b3200;
-  --color-warning-soft-fg: #d1a300;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #2a1f0a;
+  --color-warning-soft-fg: #fbbf24;
 
-  --color-danger: #dc322f;
-  --color-danger-hover: #e5524f;
-  --color-danger-fg: #fdf6e3;
-  --color-danger-soft: #3b1f23;
-  --color-danger-soft-fg: #ef6d6a;
+  --color-danger: #ef4444;
+  --color-danger-hover: #f87171;
+  --color-danger-fg: #ffffff;
+  --color-danger-soft: #2a1215;
+  --color-danger-soft-fg: #f87171;
 
-  --color-accent-soft: #2e2546;
-  --color-accent-soft-fg: #a8a3e0;
+  --color-accent-soft: #241a33;
+  --color-accent-soft-fg: #c4b5fd;
 
-  --color-neutral-soft: #0a4452;
-  --color-neutral-soft-fg: #93a1a1;
+  --color-neutral-soft: #1f1f23;
+  --color-neutral-soft-fg: #a1a1aa;
 
-  --color-code: #00212b;
-  --color-code-fg: #eee8d5;
+  --color-code: #0a0a0b;
+  --color-code-fg: #e4e4e7;
 
   color-scheme: dark;
 }
