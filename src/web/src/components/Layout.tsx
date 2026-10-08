@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import api from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/cn';
+import { onUnreadChanged } from '@/lib/messages';
+import { usePolling } from '@/lib/usePolling';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import {
   DashboardIcon,
-  InboxIcon,
   KeyIcon,
   LogoutIcon,
   MenuIcon,
   MessageIcon,
-  OutboxIcon,
-  SendIcon,
   SignalIcon,
   UsersIcon,
   WebhookIcon,
@@ -23,9 +23,7 @@ const navSections = [
     title: 'Messaging',
     items: [
       { to: '/', label: 'Dashboard', Icon: DashboardIcon },
-      { to: '/send', label: 'Send SMS', Icon: SendIcon },
-      { to: '/inbox', label: 'Inbox', Icon: InboxIcon },
-      { to: '/outbox', label: 'Outbox', Icon: OutboxIcon },
+      { to: '/chats', label: 'Messages', Icon: MessageIcon },
     ],
   },
   {
@@ -41,12 +39,35 @@ const navSections = [
 
 /** Section name for the compact mobile header. */
 function sectionTitle(pathname: string): string {
-  if (pathname.startsWith('/messages/')) return 'Message';
+  if (pathname.startsWith('/chats') || pathname.startsWith('/messages/')) return 'Messages';
   for (const section of navSections) {
     const item = section.items.find((i) => i.to === pathname);
     if (item) return item.label;
   }
   return 'SMS Gateway';
+}
+
+const UNREAD_POLL_MS = 15000;
+
+/** Total unread inbound messages, for the Messages nav badge. */
+function useUnreadCount(): number {
+  const [unread, setUnread] = useState(0);
+  const fetchUnread = useCallback(() => {
+    api
+      .get<{ unread: number }>('/sms/stats')
+      .then((res) => setUnread(res.data.unread))
+      .catch(() => {
+        // Keep the last known count; the badge is informational.
+      });
+  }, []);
+
+  useEffect(() => {
+    fetchUnread();
+    return onUnreadChanged(fetchUnread);
+  }, [fetchUnread]);
+  usePolling(fetchUnread, UNREAD_POLL_MS);
+
+  return unread;
 }
 
 function Brand() {
@@ -67,6 +88,10 @@ export default function Layout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const unread = useUnreadCount();
+  // The chat manages its own scrolling panes, so it fills the main area edge to
+  // edge instead of sitting in the padded, scrolling page container.
+  const fullBleed = pathname.startsWith('/chats');
 
   // The drawer is modal on phones; Escape should dismiss it like any dialog.
   useEffect(() => {
@@ -135,7 +160,13 @@ export default function Layout() {
                     }
                   >
                     <Icon className="h-[18px] w-[18px] shrink-0" />
-                    {label}
+                    <span className="flex-1">{label}</span>
+                    {to === '/chats' && unread > 0 && (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-fg">
+                        {unread > 99 ? '99+' : unread}
+                        <span className="sr-only"> unread</span>
+                      </span>
+                    )}
                   </NavLink>
                 ))}
               </div>
@@ -183,11 +214,17 @@ export default function Layout() {
           <span className="truncate text-base font-semibold text-fg">{sectionTitle(pathname)}</span>
         </header>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        {fullBleed ? (
+          <main className="min-h-0 flex-1 overflow-hidden">
             <Outlet />
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+              <Outlet />
+            </div>
+          </main>
+        )}
       </div>
     </div>
   );

@@ -4,10 +4,8 @@ import Layout from '@/components/Layout';
 import Dashboard from '@/pages/Dashboard';
 import Login from '@/pages/Login';
 import ChangePassword from '@/pages/ChangePassword';
-import SendSMS from '@/pages/SendSMS';
-import Inbox from '@/pages/Inbox';
-import Outbox from '@/pages/Outbox';
-import MessageDetail from '@/pages/MessageDetail';
+import Chats from '@/pages/Chats';
+import MessageRedirect from '@/pages/MessageRedirect';
 import APIKeys from '@/pages/APIKeys';
 import Webhooks from '@/pages/Webhooks';
 import Users from '@/pages/Users';
@@ -38,10 +36,14 @@ export default function App() {
         }
       >
         <Route path="/" element={<Dashboard />} />
-        <Route path="/send" element={<SendSMS />} />
-        <Route path="/inbox" element={<Inbox />} />
-        <Route path="/outbox" element={<Outbox />} />
-        <Route path="/messages/:id" element={<MessageDetail />} />
+        <Route path="/chats" element={<Chats />} />
+        <Route path="/chats/new" element={<Chats />} />
+        <Route path="/chats/:phone" element={<Chats />} />
+        {/* Pre-chat pages, kept so bookmarks and old links still resolve. */}
+        <Route path="/inbox" element={<Navigate to="/chats" replace />} />
+        <Route path="/outbox" element={<Navigate to="/chats" replace />} />
+        <Route path="/send" element={<Navigate to="/chats/new" replace />} />
+        <Route path="/messages/:id" element={<MessageRedirect />} />
         <Route path="/apikeys" element={<APIKeys />} />
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/users" element={<Users />} />
