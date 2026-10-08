@@ -28,16 +28,21 @@ import {
   Card,
   CardBody,
   CardHeader,
+  RefreshIcon,
+  Spinner,
   TerminalIcon,
   useConfirm,
 } from '@/components/ui';
 
-interface HistoryEntry {
+type EntryStatus = 'pending' | 'ok' | 'error' | 'cancelled';
+
+interface ConsoleEntry {
   id: number;
   command: string;
+  status: EntryStatus;
   response: string;
-  failed: boolean;
-  timestamp: Date;
+  /** ISO timestamp, so entries survive a round trip through localStorage. */
+  time: string;
 }
 
 interface ConfirmationRequired {
@@ -51,13 +56,44 @@ interface ConfirmationRequired {
 const QUICK_COMMANDS = ['AT', 'ATI', 'AT+CSQ', 'AT+CREG?', 'AT+COPS?', 'AT+CPIN?', 'AT+CPMS?'];
 
 const LISTBOX_ID = 'at-suggestions';
+const STORAGE_KEY = 'sms-gateway.at-console';
+const MAX_ENTRIES = 200;
 
-function formatTime(date: Date) {
-  return date.toLocaleTimeString('en-US', {
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+/** Modem replies use CRLF and pad with blank lines; a console shows the content. */
+function cleanResponse(response: string): string {
+  return response.replace(/\r/g, '').replace(/^\n+|\n+$/g, '');
+}
+
+// The log is a per-browser convenience: storage can be unavailable (private
+// windows, blocked site data), and the console must work the same without it.
+function loadEntries(): ConsoleEntry[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as ConsoleEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveEntries(entries: ConsoleEntry[]) {
+  try {
+    // A pending command has no outcome yet; after a reload it never will.
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(entries.filter((e) => e.status !== 'pending')),
+    );
+  } catch {
+    // Not persisting the log is acceptable.
+  }
 }
 
 /** Admin console for raw AT commands with autocomplete and inline reference. */
@@ -68,12 +104,12 @@ export default function ATConsole() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [entries, setEntries] = useState<ConsoleEntry[]>(loadEntries);
   // Position while browsing sent commands with the arrow keys; -1 is the draft.
   const [historyIndex, setHistoryIndex] = useState(-1);
   const inputRef = useRef<ComponentRef<'input'>>(null);
-  const nextId = useRef(0);
+  const logRef = useRef<ComponentRef<'div'>>(null);
+  const nextId = useRef(entries.reduce((max, e) => Math.max(max, e.id + 1), 0));
   const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
@@ -82,6 +118,13 @@ export default function ATConsole() {
       .then((res) => setCatalog(res.data))
       .catch(() => setCatalogError(true));
   }, []);
+
+  useEffect(() => {
+    saveEntries(entries);
+    // Like a terminal, keep the newest output in view.
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [entries]);
 
   const allSuggestions = useMemo(() => (catalog ? buildSuggestions(catalog) : []), [catalog]);
   const suggestions = useMemo(
@@ -125,7 +168,15 @@ export default function ATConsole() {
     focusInput();
   };
 
-  const sentCommands = useMemo(() => history.map((h) => h.command), [history]);
+  // Newest first, without repeating the same command back to back.
+  const sentCommands = useMemo(
+    () =>
+      entries
+        .map((e) => e.command)
+        .reverse()
+        .filter((c, i, all) => i === 0 || c !== all[i - 1]),
+    [entries],
+  );
 
   const handleKeyDown = (e: KeyboardEvent<ComponentRef<'input'>>) => {
     if (listOpen) {
@@ -167,83 +218,144 @@ export default function ATConsole() {
     }
   };
 
-  const addHistory = (cmd: string, response: string, failed: boolean) => {
-    setHistory((prev) => [
-      { id: nextId.current++, command: cmd, response, failed, timestamp: new Date() },
-      ...prev,
-    ]);
+  const updateEntry = (id: number, patch: Partial<ConsoleEntry>) => {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   };
 
-  const run = async (cmd: string, confirmed = false): Promise<void> => {
+  /**
+   * Echoes the command into the log straight away, then fills in the reply.
+   * A command the server wants confirmed stays pending while the dialog is
+   * open and ends up either answered or marked as cancelled.
+   */
+  const run = async (cmd: string) => {
+    const id = nextId.current++;
+    setEntries((prev) =>
+      [
+        ...prev,
+        {
+          id,
+          command: cmd,
+          status: 'pending' as const,
+          response: '',
+          time: new Date().toISOString(),
+        },
+      ].slice(-MAX_ENTRIES),
+    );
+    setInput('');
+    setOpen(false);
     setSending(true);
-    setError('');
-    try {
-      const res = await api.post<{ response: string }>('/modem/at', {
-        command: cmd,
-        confirm: confirmed || undefined,
-      });
-      addHistory(cmd, res.data.response, false);
-      setInput('');
-    } catch (err) {
-      const data = isAxiosError(err) ? err.response?.data : undefined;
-      if (isAxiosError(err) && err.response?.status === 409 && data?.requires_confirmation) {
-        setSending(false);
-        const required = data as ConfirmationRequired;
-        const ok = await confirm({
-          title:
-            required.risk === 'unknown'
-              ? 'Send an unrecognised command?'
-              : `Run ${required.title ?? cmd}?`,
-          description: (
-            <>
-              <code className="font-mono text-xs break-all text-fg">{cmd}</code>
-              <p className="mt-2">{required.warning}</p>
-            </>
-          ),
-          confirmLabel: 'Send anyway',
-          tone: required.risk === 'dangerous' ? 'danger' : 'warning',
+
+    const send = async (confirmed: boolean): Promise<void> => {
+      try {
+        const res = await api.post<{ response: string }>('/modem/at', {
+          command: cmd,
+          confirm: confirmed || undefined,
         });
-        if (ok) return run(cmd, true);
-        focusInput();
-        return;
+        updateEntry(id, { status: 'ok', response: res.data.response });
+      } catch (err) {
+        const data = isAxiosError(err) ? err.response?.data : undefined;
+        if (isAxiosError(err) && err.response?.status === 409 && data?.requires_confirmation) {
+          const required = data as ConfirmationRequired;
+          const ok = await confirm({
+            title:
+              required.risk === 'unknown'
+                ? 'Send an unrecognised command?'
+                : `Run ${required.title ?? cmd}?`,
+            description: (
+              <>
+                <code className="font-mono text-xs break-all text-fg">{cmd}</code>
+                <p className="mt-2">{required.warning}</p>
+              </>
+            ),
+            confirmLabel: 'Send anyway',
+            tone: required.risk === 'dangerous' ? 'danger' : 'warning',
+          });
+          if (!ok) {
+            updateEntry(id, { status: 'cancelled' });
+            return;
+          }
+          return send(true);
+        }
+        const message =
+          typeof data?.error === 'string'
+            ? data.error
+            : err instanceof Error
+              ? err.message
+              : 'Command failed.';
+        updateEntry(id, { status: 'error', response: message });
       }
-      const message =
-        typeof data?.error === 'string'
-          ? data.error
-          : err instanceof Error
-            ? err.message
-            : 'Command failed.';
-      setError(message);
-      addHistory(cmd, message, true);
+    };
+
+    try {
+      await send(false);
     } finally {
       setSending(false);
+      focusInput();
     }
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const cmd = command.trim();
-    if (!cmd || syntaxError) return;
-    setOpen(false);
+    if (!cmd || syntaxError || sending) return;
     run(cmd);
   };
 
   return (
     <Card>
       <CardHeader
-        title="AT Command"
+        title="AT Console"
         description="Type a command or search by name, e.g. csq or signal."
         actions={
-          history.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setHistory([])}>
-              Clear history
+          entries.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => setEntries([])} disabled={sending}>
+              Clear console
             </Button>
           )
         }
       />
       <CardBody className="space-y-4">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <div className="relative min-w-0 flex-1">
+        <div className="flex flex-wrap gap-1.5">
+          {QUICK_COMMANDS.map((cmd) => (
+            <button
+              key={cmd}
+              type="button"
+              disabled={sending}
+              onClick={() => run(cmd)}
+              className="rounded-md border border-border bg-surface-muted px-2 py-1 font-mono text-xs text-fg-muted transition-colors hover:border-primary hover:text-fg disabled:opacity-50"
+            >
+              {cmd}
+            </button>
+          ))}
+        </div>
+
+        {/* Terminal: the log scrolls above, the prompt stays at the bottom. */}
+        <div className="rounded-lg border border-border bg-code font-mono text-xs text-code-fg shadow-inner sm:text-[13px]">
+          <div
+            ref={logRef}
+            role="log"
+            aria-live="polite"
+            aria-label="AT console output"
+            className="h-72 space-y-3 overflow-y-auto p-3 sm:h-96 sm:p-4"
+          >
+            {entries.length === 0 ? (
+              <p className="text-slate-500">
+                # Responses from the modem appear here. Try AT+CSQ or pick a quick command.
+              </p>
+            ) : (
+              entries.map((entry) => (
+                <ConsoleLine key={entry.id} entry={entry} onRetry={run} retryDisabled={sending} />
+              ))
+            )}
+          </div>
+
+          <form
+            onSubmit={handleSubmit}
+            className="relative flex items-center gap-2 border-t border-white/10 px-3 py-2 sm:px-4"
+          >
+            <span aria-hidden="true" className="font-semibold text-emerald-400">
+              ›
+            </span>
             <label htmlFor="atCommand" className="sr-only">
               AT command
             </label>
@@ -270,15 +382,25 @@ export default function ATConsole() {
               onBlur={() => setOpen(false)}
               onKeyDown={handleKeyDown}
               placeholder="AT+CSQ"
-              className="block w-full min-w-0 rounded-lg border border-border-strong bg-field px-3 py-2 font-mono text-base text-fg shadow-sm transition-colors placeholder:text-fg-subtle focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none aria-invalid:border-danger sm:text-sm"
+              className="min-w-0 flex-1 bg-transparent py-1.5 text-base text-slate-100 placeholder:text-slate-600 focus:outline-none sm:text-[13px]"
             />
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!command.trim() || !!syntaxError || sending}
+              loading={sending}
+              icon={<TerminalIcon className="h-4 w-4" />}
+            >
+              <span className="hidden sm:inline">{sending ? 'Sending...' : 'Send'}</span>
+            </Button>
 
+            {/* The prompt sits at the bottom, so suggestions open upwards. */}
             {listOpen && (
               <ul
                 id={LISTBOX_ID}
                 role="listbox"
                 aria-label="Command suggestions"
-                className="absolute inset-x-0 top-full z-10 mt-1 max-h-80 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-xl"
+                className="absolute inset-x-0 bottom-full z-10 mb-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface py-1 font-sans shadow-xl"
               >
                 {suggestions.map((s, i) => {
                   const kind = s.info?.forms.find((f) => f.syntax === s.syntax)?.kind;
@@ -318,39 +440,17 @@ export default function ATConsole() {
                 })}
               </ul>
             )}
-
-            {/* While suggestions are showing, the text is a search, not a command yet. */}
-            {syntaxError && !listOpen ? (
-              <p className="mt-1.5 text-xs text-danger">{syntaxError}</p>
-            ) : (
-              <p className="mt-1.5 hidden text-xs text-fg-subtle sm:block">
-                Tab completes · ↑↓ browse suggestions or history · Esc closes
-              </p>
-            )}
-          </div>
-          <Button
-            type="submit"
-            disabled={!command.trim() || !!syntaxError}
-            loading={sending}
-            icon={<TerminalIcon className="h-4 w-4" />}
-          >
-            {sending ? 'Sending...' : 'Send'}
-          </Button>
-        </form>
-
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_COMMANDS.map((cmd) => (
-            <button
-              key={cmd}
-              type="button"
-              disabled={sending}
-              onClick={() => run(cmd)}
-              className="rounded-md border border-border bg-surface-muted px-2 py-1 font-mono text-xs text-fg-muted transition-colors hover:border-primary hover:text-fg disabled:opacity-50"
-            >
-              {cmd}
-            </button>
-          ))}
+          </form>
         </div>
+
+        {/* While suggestions are showing, the text is a search, not a command yet. */}
+        {syntaxError && !listOpen ? (
+          <p className="-mt-2 text-xs text-danger">{syntaxError}</p>
+        ) : (
+          <p className="-mt-2 hidden text-xs text-fg-subtle sm:block">
+            Tab completes · ↑↓ browse suggestions or previous commands · Esc closes
+          </p>
+        )}
 
         {catalogError && (
           <Alert tone="warning">
@@ -384,54 +484,73 @@ export default function ATConsole() {
             />
           )
         )}
-
-        {error && <Alert>{error}</Alert>}
-
-        {history.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-fg">Command History</h3>
-            {history.map((entry) => {
-              const notes = decodeATResponse(entry.response);
-              return (
-                <div key={entry.id} className="overflow-hidden rounded-lg border border-border">
-                  <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-muted px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInput(entry.command);
-                        focusInput();
-                      }}
-                      className="truncate font-mono text-sm font-semibold text-primary hover:underline"
-                      title="Edit and send again"
-                    >
-                      {entry.command}
-                    </button>
-                    <span className="shrink-0 text-xs text-fg-subtle">
-                      {formatTime(entry.timestamp)}
-                    </span>
-                  </div>
-                  <pre
-                    className={cn(
-                      'overflow-x-auto bg-code p-3 font-mono text-xs break-words whitespace-pre-wrap',
-                      entry.failed ? 'text-danger' : 'text-code-fg',
-                    )}
-                  >
-                    {entry.response.trim() || '(empty response)'}
-                  </pre>
-                  {notes.length > 0 && (
-                    <ul className="space-y-0.5 border-t border-border bg-surface px-3 py-2 text-xs text-fg-muted">
-                      {notes.map((note, i) => (
-                        <li key={i}>→ {note}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </CardBody>
       {dialog}
     </Card>
+  );
+}
+
+/** One command and its outcome, rendered like a terminal transcript. */
+function ConsoleLine({
+  entry,
+  onRetry,
+  retryDisabled,
+}: {
+  entry: ConsoleEntry;
+  onRetry: (command: string) => void;
+  retryDisabled: boolean;
+}) {
+  const response = cleanResponse(entry.response);
+  const notes =
+    entry.status === 'ok' || entry.status === 'error' ? decodeATResponse(entry.response) : [];
+
+  return (
+    <div className="group">
+      <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="font-semibold text-emerald-400">
+          ›
+        </span>
+        <span className="min-w-0 flex-1 font-semibold break-all text-slate-100">
+          {entry.command}
+        </span>
+        <button
+          type="button"
+          onClick={() => onRetry(entry.command)}
+          disabled={retryDisabled}
+          className="shrink-0 rounded p-1 text-slate-500 transition hover:bg-white/10 hover:text-slate-200 disabled:opacity-40 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+          aria-label={`Run ${entry.command} again`}
+          title="Run again"
+        >
+          <RefreshIcon className="h-3.5 w-3.5" />
+        </button>
+        <time dateTime={entry.time} className="shrink-0 text-[11px] text-slate-500">
+          {formatTime(entry.time)}
+        </time>
+      </div>
+
+      <div className="mt-1 pl-4">
+        {entry.status === 'pending' && (
+          <p className="flex items-center gap-2 text-slate-400">
+            <Spinner className="h-3 w-3" /> waiting for the modem…
+          </p>
+        )}
+        {entry.status === 'cancelled' && <p className="text-amber-300"># cancelled, not sent</p>}
+        {(entry.status === 'ok' || entry.status === 'error') && (
+          <pre
+            className={cn(
+              'font-mono break-words whitespace-pre-wrap',
+              entry.status === 'error' ? 'text-red-400' : 'text-slate-300',
+            )}
+          >
+            {response || '(empty response)'}
+          </pre>
+        )}
+        {notes.map((note, i) => (
+          <p key={i} className="text-sky-300">
+            # {note}
+          </p>
+        ))}
+      </div>
+    </div>
   );
 }
