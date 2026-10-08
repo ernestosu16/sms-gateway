@@ -936,6 +936,43 @@ paths:
       summary: Create user
       tags:
       - Users
+  /api/v1/users/{id}:
+    delete:
+      description: Permanently deletes a non-admin user account and its API keys.
+        Messages sent with those keys are kept. Administrator accounts cannot be deleted.
+        Requires admin privileges.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message: user deleted'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete user
+      tags:
+      - Users
   /api/v1/webhooks:
     get:
       description: Returns registered webhooks, newest first. Requires admin privileges.

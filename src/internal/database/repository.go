@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -145,6 +146,55 @@ func (r *Repository) GetUserByUsername(username string) (*models.User, error) {
 		 FROM users WHERE username = ?`, username,
 	)
 	return scanUser(row)
+}
+
+// ErrAdminUserProtected is returned when deleting an administrator account.
+// Admins are never deletable, which also guarantees the gateway always keeps
+// at least one account able to manage it.
+var ErrAdminUserProtected = errors.New("administrator accounts cannot be deleted")
+
+// DeleteUser permanently removes a non-admin user and their API keys.
+// Messages sent with those keys are kept and lose their api_key_id: message
+// history outlives the credentials that produced it, and the foreign key would
+// otherwise block deleting the keys. The error wraps sql.ErrNoRows when no
+// user has the given id, and is ErrAdminUserProtected for an admin.
+func (r *Repository) DeleteUser(id string) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("deleting user: beginning transaction: %w", err)
+	}
+	// A no-op once Commit has succeeded.
+	defer func() { _ = tx.Rollback() }()
+
+	var isAdmin int
+	if err := tx.QueryRow(`SELECT is_admin FROM users WHERE id = ?`, id).Scan(&isAdmin); err != nil {
+		return fmt.Errorf("deleting user: %w", err)
+	}
+	if isAdmin != 0 {
+		return ErrAdminUserProtected
+	}
+
+	if _, err := tx.Exec(
+		`UPDATE messages SET api_key_id = NULL
+		 WHERE api_key_id IN (SELECT id FROM api_keys WHERE user_id = ?)`, id,
+	); err != nil {
+		return fmt.Errorf("deleting user: detaching messages: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM api_keys WHERE user_id = ?`, id); err != nil {
+		return fmt.Errorf("deleting user: deleting API keys: %w", err)
+	}
+	result, err := tx.Exec(`DELETE FROM users WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting user: %w", err)
+	}
+	if err := requireRowAffected(result, "deleting user"); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("deleting user: committing: %w", err)
+	}
+	return nil
 }
 
 // ListUsers returns users newest first, limited according to opts.

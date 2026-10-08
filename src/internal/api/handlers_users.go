@@ -1,8 +1,12 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/mattboston/sms-gateway/internal/auth"
 	"github.com/mattboston/sms-gateway/internal/database"
@@ -96,4 +100,31 @@ func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, user)
+}
+
+// HandleDeleteUser permanently deletes a user account and its API keys.
+//
+// @Summary      Delete user
+// @Description  Permanently deletes a non-admin user account and its API keys. Messages sent with those keys are kept. Administrator accounts cannot be deleted. Requires admin privileges.
+// @Tags         Users
+// @Produce      json
+// @Param        id   path      string  true  "User ID"
+// @Success      200  {object}  map[string]string  "message: user deleted"
+// @Failure      403  {object}  models.ErrorResponse
+// @Failure      404  {object}  models.ErrorResponse
+// @Failure      500  {object}  models.ErrorResponse
+// @Security     BearerAuth
+// @Router       /api/v1/users/{id} [delete]
+func (h *UserHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	err := h.repo.DeleteUser(chi.URLParam(r, "id"))
+	switch {
+	case errors.Is(err, database.ErrAdminUserProtected):
+		writeJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "administrator accounts cannot be deleted"})
+	case errors.Is(err, sql.ErrNoRows):
+		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "user not found"})
+	case err != nil:
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to delete user"})
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"message": "user deleted"})
+	}
 }
