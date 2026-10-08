@@ -19,6 +19,7 @@ import {
   SendIcon,
   Textarea,
   TrashIcon,
+  useConfirm,
 } from '@/components/ui';
 
 interface MessageDetails extends Message {
@@ -57,6 +58,7 @@ export default function MessageDetail() {
   const [message, setMessage] = useState<MessageDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { confirm, dialog } = useConfirm();
   const [debugOpen, setDebugOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [replyBody, setReplyBody] = useState('');
@@ -137,7 +139,12 @@ export default function MessageDetail() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this message?')) return;
+    const confirmed = await confirm({
+      title: 'Delete this message?',
+      description: 'This permanently removes it from the gateway and cannot be undone.',
+      confirmLabel: 'Delete',
+    });
+    if (!confirmed) return;
     setDeleting(true);
     try {
       await api.delete(`/sms/${message.id}`);
@@ -292,6 +299,8 @@ export default function MessageDetail() {
           )}
         </Card>
       )}
+
+      {dialog}
     </div>
   );
 }
