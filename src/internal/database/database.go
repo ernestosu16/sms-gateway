@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // register pgx database/sql driver
 	_ "modernc.org/sqlite"             // register sqlite database/sql driver
@@ -21,28 +22,31 @@ func New(driver, dsn string) (*sql.DB, error) {
 	}
 }
 
+// sqlitePragmas run on every new pooled connection. busy_timeout and
+// foreign_keys are per-connection settings, so running them once through
+// db.Exec would configure only whichever connection served that call; the
+// driver applies DSN _pragma params each time it opens a connection.
+//   - busy_timeout: concurrent writers wait for the lock instead of failing
+//     immediately with SQLITE_BUSY. Listed first so the WAL switch waits too.
+//   - journal_mode=WAL: better concurrent read performance.
+//   - foreign_keys: enforce foreign key constraints.
+const sqlitePragmas = "_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
+
 func openSQLite(dsn string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", dsn)
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+
+	db, err := sql.Open("sqlite", dsn+sep+sqlitePragmas)
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite database: %w", err)
 	}
 
-	// Enable WAL mode for better concurrent read performance.
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+	// sql.Open is lazy; connect now so bad paths and pragma failures surface here.
+	if err := db.Ping(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("enabling WAL mode: %w", err)
-	}
-
-	// Set busy timeout so concurrent writers retry instead of failing immediately.
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("setting busy timeout: %w", err)
-	}
-
-	// Enable foreign key enforcement.
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("enabling foreign keys: %w", err)
+		return nil, fmt.Errorf("opening sqlite database: %w", err)
 	}
 
 	return db, nil
