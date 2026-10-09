@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Dev watch (API + Web)" type="CompoundRunConfigurationType">
+    <toRun name="API (watch)" type="ShConfigurationType" />
+    <toRun name="Web (Vite)" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>

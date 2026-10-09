@@ -1,0 +1,26 @@
+# Live reload for the Go backend (https://github.com/air-verse/air).
+# Run with `just dev-watch` or `just dev-api-watch`; rebuilds and restarts
+# `serve --dev-mode` whenever Go code or migrations change.
+# The binary keeps the .exe suffix on every OS so this one file works on
+# Windows too; macOS and Linux ignore the extension. Windows has no SIGINT,
+# so air skips send_interrupt there and kills the process instead.
+root = "."
+tmp_dir = "../.tmp/air"
+
+[build]
+  cmd = "go build -o ../.tmp/air/sms-gateway.exe ./cmd/sms-gateway"
+  entrypoint = ["../.tmp/air/sms-gateway.exe"]
+  args_bin = ["serve", "--dev-mode", "--db-dsn", "./sms-gateway.db"]
+  include_ext = ["go", "sql"]
+  exclude_dir = ["web", "docs", "vendor"]
+  exclude_regex = ["_test\\.go$"]
+  delay = 500
+  kill_delay = "2s"
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  main_only = true
+
+[misc]
+  clean_on_exit = true

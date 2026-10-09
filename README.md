@@ -597,12 +597,13 @@ Before contributing, review [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch nami
 
 - Go 1.25+
 - Node.js 22+
-- [Just](https://github.com/casey/just) command runner
+- [Just](https://github.com/casey/just) 1.42+ command runner (on Windows, install [Git for Windows](https://git-scm.com/download/win) so Just can use its `sh`)
 
 ### Commands
 
 ```bash
 just dev            # Run backend + frontend dev servers
+just dev-watch      # Same, rebuilding the backend on every Go or SQL change (air)
 just build          # Build production binary
 just test           # Run Go tests
 just lint           # Run all linters

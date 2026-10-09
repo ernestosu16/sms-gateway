@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="API (dev)" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="sms-gateway" />
+    <working_directory value="$PROJECT_DIR$/src" />
+    <parameters value="serve --dev-mode --db-dsn ./sms-gateway.db" />
+    <kind value="PACKAGE" />
+    <package value="github.com/mattboston/sms-gateway/cmd/sms-gateway" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/src/cmd/sms-gateway/main.go" />
+    <method v="2" />
+  </configuration>
+</component>

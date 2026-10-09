@@ -1,19 +1,25 @@
+# Live-reload tool for the Go backend, pinned and fetched on first use by `go run`
+air := "go run github.com/air-verse/air@v1.67.4"
+
 # Show available commands
 default:
     @just --list
 
 # Run Go backend and Vite frontend in development mode
-dev:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    trap 'kill 0' EXIT
-    (cd src && go run ./cmd/sms-gateway serve --dev-mode --db-dsn ./sms-gateway.db) &
-    (cd src/web && npm run dev) &
-    wait
+[parallel]
+dev: dev-api dev-web
 
 # Run just the Go backend in dev mode
 dev-api:
-    cd src && go run ./cmd/sms-gateway serve --dev-mode
+    cd src && go run ./cmd/sms-gateway serve --dev-mode --db-dsn ./sms-gateway.db
+
+# Run Go backend with live reload (air) and Vite frontend
+[parallel]
+dev-watch: dev-api-watch dev-web
+
+# Run just the Go backend with live reload (air)
+dev-api-watch:
+    cd src && {{ air }}
 
 # Run just the Vite dev server
 dev-web:

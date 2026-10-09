@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Dev (API + Web)" type="CompoundRunConfigurationType">
+    <toRun name="API (dev)" type="GoApplicationRunConfiguration" />
+    <toRun name="Web (Vite)" type="js.build_tools.npm" />
+    <method v="2" />
+  </configuration>
+</component>

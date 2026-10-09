@@ -607,12 +607,13 @@ Antes de contribuir, revisa [`CONTRIBUTING.md`](CONTRIBUTING.md) (en inglés) pa
 
 - Go 1.25+
 - Node.js 22+
-- [Just](https://github.com/casey/just) como ejecutor de comandos
+- [Just](https://github.com/casey/just) 1.42+ como ejecutor de comandos (en Windows, instala [Git for Windows](https://git-scm.com/download/win) para que Just use su `sh`)
 
 ### Comandos
 
 ```bash
 just dev            # Servidores de desarrollo de backend y frontend
+just dev-watch      # Igual, recompilando el backend con cada cambio de Go o SQL (air)
 just build          # Compilar el binario de producción
 just test           # Ejecutar los tests de Go
 just lint           # Ejecutar todos los linters
