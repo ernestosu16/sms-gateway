@@ -54,6 +54,24 @@ func TestHandleModemSignal(t *testing.T) {
 	}
 }
 
+func TestHandleModemInfo(t *testing.T) {
+	handler := NewModemHandler(modem.NewMockModem())
+
+	w := httptest.NewRecorder()
+	handler.HandleModemInfo(w, httptest.NewRequest(http.MethodGet, "/api/v1/modem/info", nil))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var resp models.ModemInfoResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if resp.Provider != "Tello" || resp.Network != "T-Mobile" || resp.PhoneNumber != "+13055550123" || resp.IMEI == "" {
+		t.Errorf("resp = %+v", resp)
+	}
+}
+
 func TestHandleSendATCommand(t *testing.T) {
 	mock := modem.NewMockModem()
 	handler := NewModemHandler(mock)

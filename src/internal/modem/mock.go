@@ -47,10 +47,10 @@ func (m *MockModem) GetSignal() (int, error) {
 	return 20, nil
 }
 
-// mockATReplies holds the information lines a registered LTE-M modem returns
-// for common queries, keyed by the upper-cased command. They are consistent
-// with GetSignal and with a SIM that is ready and registered, so carrier
-// setup checks pass in dev mode.
+// mockATReplies holds the information lines a registered LTE-M modem with a
+// Tello SIM (an MVNO on T-Mobile) returns for common queries, keyed by the
+// upper-cased command. They are consistent with GetSignal and with a SIM that
+// is ready and registered, so carrier setup checks pass in dev mode.
 var mockATReplies = map[string]string{
 	"ATI":       "SIMCOM_SIM7080G\r\nRevision:mock",
 	"AT+CPIN?":  "+CPIN: READY",
@@ -59,7 +59,10 @@ var mockATReplies = map[string]string{
 	"AT+CNMP?":  "+CNMP: 38",
 	"AT+CREG?":  "+CREG: 0,1",
 	"AT+CEREG?": "+CEREG: 2,1",
-	"AT+COPS?":  `+COPS: 0,0,"Tello",9`,
+	"AT+COPS?":  `+COPS: 0,0,"T-Mobile",9`,
+	"AT+CSPN?":  `+CSPN: "Tello",0`,
+	"AT+CNUM":   `+CNUM: "","+13055550123",145`,
+	"AT+CGMR":   "Revision:1951B17SIM7080",
 	"AT+CSQ":    "+CSQ: 20,99",
 	"AT+CMGF?":  "+CMGF: 1",
 	"AT+CSCA?":  `+CSCA: "+12063130004",145`,

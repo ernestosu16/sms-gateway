@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 import en, { type MessageKey } from '@/locales/en';
-import { ModemHealthCards, useModemHealth } from '@/components/ModemHealth';
+import { ModemHealthCards, ModemInfoCard, useModemHealth } from '@/components/ModemHealth';
 import {
   Alert,
   Button,
@@ -124,7 +124,7 @@ function ModemSetupManager() {
   const { t } = useI18n();
   const pt = useProfileText();
   const { confirm, dialog } = useConfirm();
-  const health = useModemHealth();
+  const health = useModemHealth({ withInfo: true });
 
   const [profiles, setProfiles] = useState<ModemProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -294,6 +294,7 @@ function ModemSetupManager() {
       />
 
       <ModemHealthCards health={health} />
+      <ModemInfoCard health={health} />
 
       {error && <Alert>{error}</Alert>}
       {success && <Alert tone="success">{success}</Alert>}

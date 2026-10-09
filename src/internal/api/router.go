@@ -116,6 +116,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 
 		r.Post("/api/v1/modem/at", modemHandler.HandleSendATCommand)
 		r.Get("/api/v1/modem/at/commands", modemHandler.HandleATCatalog)
+		r.Get("/api/v1/modem/info", modemHandler.HandleModemInfo)
 		r.Get("/api/v1/modem/profiles", modemProfileHandler.HandleListModemProfiles)
 		r.Post("/api/v1/modem/profiles", modemProfileHandler.HandleCreateModemProfile)
 		r.Get("/api/v1/modem/profiles/{id}", modemProfileHandler.HandleGetModemProfile)

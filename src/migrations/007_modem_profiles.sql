@@ -39,7 +39,8 @@ INSERT INTO modem_profiles (id, name, description, notes, steps) VALUES (
   {"title": "modemSetup.seed.step.checkRegistration", "commands": [
     {"command": "AT+CEREG=2"},
     {"command": "AT+CEREG?", "expect": "\\+CEREG:\\s*\\d,[15]"},
-    {"command": "AT+COPS?", "expect": "Tello"},
+    {"command": "AT+CSPN?", "expect": "Tello"},
+    {"command": "AT+COPS?", "expect": "Tello|T-Mobile"},
     {"command": "AT+CSQ"}
   ]},
   {"title": "modemSetup.seed.step.configureSms", "commands": [

@@ -54,6 +54,32 @@ func (h *ModemHandler) HandleModemStatus(w http.ResponseWriter, _ *http.Request)
 	writeJSON(w, http.StatusOK, models.ModemStatusResponse{Status: "ok"})
 }
 
+// HandleModemInfo returns the modem and SIM identity (admin only).
+//
+// @Summary      Get modem and SIM details
+// @Description  Returns the line provider and network, the SIM phone number, ICCID and IMSI, and the modem IMEI, manufacturer, model and firmware. A field is empty when the modem or SIM cannot report it; many SIMs do not store their phone number. Requires admin privileges.
+// @Tags         Modem
+// @Produce      json
+// @Success      200  {object}  models.ModemInfoResponse
+// @Failure      401  {object}  models.ErrorResponse
+// @Failure      403  {object}  models.ErrorResponse
+// @Security     BearerAuth
+// @Router       /api/v1/modem/info [get]
+func (h *ModemHandler) HandleModemInfo(w http.ResponseWriter, _ *http.Request) {
+	i := modem.ReadInfo(h.modem)
+	writeJSON(w, http.StatusOK, models.ModemInfoResponse{
+		Provider:     i.Provider,
+		Network:      i.Network,
+		PhoneNumber:  i.PhoneNumber,
+		ICCID:        i.ICCID,
+		IMSI:         i.IMSI,
+		IMEI:         i.IMEI,
+		Manufacturer: i.Manufacturer,
+		Model:        i.Model,
+		Firmware:     i.Firmware,
+	})
+}
+
 // HandleModemSignal returns the modem signal strength.
 //
 // @Summary      Get modem signal strength

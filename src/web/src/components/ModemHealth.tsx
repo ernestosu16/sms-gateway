@@ -3,11 +3,16 @@ import api from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useI18n } from '@/lib/i18n';
 import type { MessageKey } from '@/locales/en';
+import { copyToClipboard } from '@/lib/clipboard';
 import {
   AlertIcon,
   Badge,
+  Button,
   Card,
+  CardBody,
+  CardHeader,
   CheckCircleIcon,
+  GlobeIcon,
   SignalIcon,
   Spinner,
   type Tone,
@@ -20,6 +25,21 @@ interface ModemStatus {
 interface ModemSignal {
   signal: number;
   quality: string;
+}
+
+/** Modem and SIM identity; a field is empty when it cannot be read. */
+export interface ModemInfo {
+  /** Service provider name stored on the SIM, e.g. the MVNO brand. */
+  provider: string;
+  /** Network the modem is registered on. */
+  network: string;
+  phone_number: string;
+  iccid: string;
+  imsi: string;
+  imei: string;
+  manufacturer: string;
+  model: string;
+  firmware: string;
 }
 
 /** Highest value AT+CSQ reports for a usable signal. */
@@ -56,16 +76,24 @@ const TONE_BAR: Record<Tone, string> = {
 export interface ModemHealth {
   status: ModemStatus | null;
   signal: ModemSignal | null;
+  /** Whether modem and SIM details were requested (they are admin only). */
+  withInfo: boolean;
+  info: ModemInfo | null;
   statusLoading: boolean;
   signalLoading: boolean;
+  infoLoading: boolean;
   statusError: string;
   signalError: string;
+  infoError: string;
   refreshing: boolean;
   refresh: () => void;
 }
 
-/** Loads the modem status and signal, with a refresh for both. */
-export function useModemHealth(): ModemHealth {
+/**
+ * Loads the modem status and signal, plus the modem and SIM details when
+ * withInfo is set, with one refresh for all of them.
+ */
+export function useModemHealth({ withInfo = false }: { withInfo?: boolean } = {}): ModemHealth {
   const { t } = useI18n();
   const [status, setStatus] = useState<ModemStatus | null>(null);
   const [signal, setSignal] = useState<ModemSignal | null>(null);
@@ -73,6 +101,9 @@ export function useModemHealth(): ModemHealth {
   const [signalLoading, setSignalLoading] = useState(true);
   const [statusError, setStatusError] = useState('');
   const [signalError, setSignalError] = useState('');
+  const [info, setInfo] = useState<ModemInfo | null>(null);
+  const [infoLoading, setInfoLoading] = useState(withInfo);
+  const [infoError, setInfoError] = useState('');
 
   const fetchStatus = useCallback(async () => {
     setStatusLoading(true);
@@ -100,10 +131,24 @@ export function useModemHealth(): ModemHealth {
     }
   }, [t]);
 
+  const fetchInfo = useCallback(async () => {
+    setInfoLoading(true);
+    setInfoError('');
+    try {
+      const response = await api.get<ModemInfo>('/modem/info');
+      setInfo(response.data);
+    } catch {
+      setInfoError(t('modem.infoFailed'));
+    } finally {
+      setInfoLoading(false);
+    }
+  }, [t]);
+
   const refresh = useCallback(() => {
     fetchStatus();
     fetchSignal();
-  }, [fetchStatus, fetchSignal]);
+    if (withInfo) fetchInfo();
+  }, [fetchStatus, fetchSignal, fetchInfo, withInfo]);
 
   useEffect(() => {
     refresh();
@@ -112,11 +157,15 @@ export function useModemHealth(): ModemHealth {
   return {
     status,
     signal,
+    withInfo,
+    info,
     statusLoading,
     signalLoading,
+    infoLoading,
     statusError,
     signalError,
-    refreshing: statusLoading || signalLoading,
+    infoError,
+    refreshing: statusLoading || signalLoading || infoLoading,
     refresh,
   };
 }
@@ -148,8 +197,10 @@ function HealthTile({
   label,
   loading,
   error,
+  className,
   children,
 }: {
+  className?: string;
   icon: ReactNode;
   iconClass: string;
   label: string;
@@ -159,7 +210,7 @@ function HealthTile({
 }) {
   const { t } = useI18n();
   return (
-    <Card className="p-4 sm:p-5">
+    <Card className={cn('p-4 sm:p-5', className)}>
       <div className="flex items-center gap-4">
         <div
           className={cn(
@@ -186,10 +237,18 @@ function HealthTile({
   );
 }
 
-/** Modem status and signal strength side by side, stacked on phones. */
+/**
+ * Modem status and signal strength, plus the line provider when details were
+ * requested; stacked on phones.
+ */
 export function ModemHealthCards({ health }: { health: ModemHealth }) {
   const { t } = useI18n();
-  const { status, signal } = health;
+  const { status, signal, info } = health;
+  // An MVNO's SIM names the brand while the modem registers on the host
+  // network; show the brand first and the network beneath it.
+  const providerName = info?.provider || info?.network || '';
+  const hostNetwork =
+    info?.provider && info.network && info.network !== info.provider ? info.network : '';
   const connected = status?.status === 'ok';
   const tone = signal ? qualityTone(signal.quality) : 'neutral';
   const percent = signal
@@ -197,7 +256,7 @@ export function ModemHealthCards({ health }: { health: ModemHealth }) {
     : 0;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
+    <div className={cn('grid gap-4 sm:grid-cols-2 sm:gap-6', health.withInfo && 'xl:grid-cols-3')}>
       <HealthTile
         icon={
           connected ? <CheckCircleIcon className="h-6 w-6" /> : <AlertIcon className="h-6 w-6" />
@@ -274,6 +333,106 @@ export function ModemHealthCards({ health }: { health: ModemHealth }) {
           <p className="text-sm text-fg-muted">{t('modem.noSignal')}</p>
         )}
       </HealthTile>
+
+      {health.withInfo && (
+        <HealthTile
+          className="sm:col-span-2 xl:col-span-1"
+          icon={<GlobeIcon className="h-6 w-6" />}
+          iconClass={
+            providerName ? 'bg-primary-soft text-primary' : 'bg-surface-muted text-fg-subtle'
+          }
+          label={t('modem.carrier')}
+          loading={health.infoLoading}
+          error={health.infoError}
+        >
+          {providerName ? (
+            <div className="min-w-0">
+              <p className="truncate text-lg font-semibold text-fg" title={providerName}>
+                {providerName}
+              </p>
+              {hostNetwork && (
+                <p className="truncate text-xs text-fg-muted">
+                  {t('modem.carrierNetwork', { name: hostNetwork })}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-fg-muted">{t('modem.carrierUnknown')}</p>
+          )}
+        </HealthTile>
+      )}
     </div>
+  );
+}
+
+const INFO_FIELDS: { key: keyof ModemInfo; label: MessageKey; copy?: boolean }[] = [
+  { key: 'phone_number', label: 'modem.info.phoneNumber', copy: true },
+  { key: 'provider', label: 'modem.info.provider' },
+  { key: 'network', label: 'modem.info.network' },
+  { key: 'iccid', label: 'modem.info.iccid', copy: true },
+  { key: 'imsi', label: 'modem.info.imsi', copy: true },
+  { key: 'imei', label: 'modem.info.imei', copy: true },
+  { key: 'manufacturer', label: 'modem.info.manufacturer' },
+  { key: 'model', label: 'modem.info.model' },
+  { key: 'firmware', label: 'modem.info.firmware' },
+];
+
+/** Every modem and SIM detail as a label/value grid, with copy buttons for IDs. */
+export function ModemInfoCard({ health }: { health: ModemHealth }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState<keyof ModemInfo | null>(null);
+
+  const handleCopy = async (key: keyof ModemInfo, value: string) => {
+    try {
+      await copyToClipboard(value);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      // Copying is a convenience; the value stays selectable.
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader title={t('modem.info.title')} description={t('modem.info.description')} />
+      <CardBody>
+        {health.infoLoading && !health.info ? (
+          <p className="flex items-center gap-2 text-sm text-fg-muted">
+            <Spinner className="h-4 w-4" /> {t('common.loading')}
+          </p>
+        ) : health.infoError ? (
+          <p className="text-sm text-danger">{health.infoError}</p>
+        ) : (
+          <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
+            {INFO_FIELDS.map(({ key, label, copy }) => {
+              const value = health.info?.[key] ?? '';
+              return (
+                <div key={key} className="min-w-0">
+                  <dt className="text-xs font-medium tracking-wide text-fg-muted uppercase">
+                    {t(label)}
+                  </dt>
+                  <dd className="mt-1 flex items-center gap-2">
+                    {value ? (
+                      <>
+                        <span className={cn('text-sm break-all text-fg', copy && 'font-mono')}>
+                          {value}
+                        </span>
+                        {copy && (
+                          <Button variant="link" onClick={() => handleCopy(key, value)}>
+                            {copied === key ? t('common.copied') : t('common.copy')}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-sm text-fg-subtle">{t('modem.info.unavailable')}</span>
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        )}
+      </CardBody>
+    </Card>
   );
 }

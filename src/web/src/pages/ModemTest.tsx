@@ -1,7 +1,7 @@
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import ATConsole from '@/components/at/ATConsole';
-import { ModemHealthCards, useModemHealth } from '@/components/ModemHealth';
+import { ModemHealthCards, ModemInfoCard, useModemHealth } from '@/components/ModemHealth';
 import { Button, PageHeader, RefreshIcon } from '@/components/ui';
 
 export default function ModemTest() {
@@ -9,7 +9,8 @@ export default function ModemTest() {
   const isAdmin = user?.is_admin ?? false;
   const { t } = useI18n();
 
-  const health = useModemHealth();
+  // Modem and SIM details come from an admin-only endpoint.
+  const health = useModemHealth({ withInfo: isAdmin });
 
   return (
     <div className="space-y-6">
@@ -29,6 +30,7 @@ export default function ModemTest() {
       />
 
       <ModemHealthCards health={health} />
+      {isAdmin && <ModemInfoCard health={health} />}
 
       {/* Raw AT console - admin only, as is the endpoint behind it */}
       {isAdmin && <ATConsole />}

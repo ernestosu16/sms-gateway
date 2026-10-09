@@ -237,6 +237,22 @@ type ModemSignalResponse struct {
 	Quality string `json:"quality"`
 }
 
+// ModemInfoResponse identifies the modem and the SIM in it. A field is empty
+// when the modem or SIM cannot report it.
+type ModemInfoResponse struct {
+	// Provider is the service provider name stored on the SIM, e.g. "Tello".
+	Provider string `json:"provider"`
+	// Network is the operator the modem is registered on, e.g. "T-Mobile".
+	Network      string `json:"network"`
+	PhoneNumber  string `json:"phone_number"`
+	ICCID        string `json:"iccid"`
+	IMSI         string `json:"imsi"`
+	IMEI         string `json:"imei"`
+	Manufacturer string `json:"manufacturer"`
+	Model        string `json:"model"`
+	Firmware     string `json:"firmware"`
+}
+
 // ATCommandRequest is the request body for sending a raw AT command.
 type ATCommandRequest struct {
 	Command string `json:"command"`
