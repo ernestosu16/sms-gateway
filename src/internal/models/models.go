@@ -260,6 +260,41 @@ type ATCommandResponse struct {
 	Response string `json:"response"`
 }
 
+// ModemProfile is a carrier setup recipe: ordered steps of AT commands an
+// admin runs to prepare a SIM on that carrier.
+type ModemProfile struct {
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Notes       string        `json:"notes"`
+	Steps       []ProfileStep `json:"steps"`
+	CreatedAt   time.Time     `json:"created_at"`
+	UpdatedAt   time.Time     `json:"updated_at"`
+}
+
+// ProfileStep is a titled group of AT commands run in order.
+type ProfileStep struct {
+	Title    string           `json:"title"`
+	Commands []ProfileCommand `json:"commands"`
+}
+
+// ProfileCommand is one AT command of a profile step.
+type ProfileCommand struct {
+	Command string `json:"command"`
+	// Expect is an optional case-insensitive regular expression the response
+	// must match for the command to count as passed.
+	Expect string `json:"expect,omitempty"`
+}
+
+// ModemProfileRequest is the request body for creating or updating a modem
+// profile.
+type ModemProfileRequest struct {
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Notes       string        `json:"notes"`
+	Steps       []ProfileStep `json:"steps"`
+}
+
 // ChangePasswordRequest is the request body for changing a password.
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`

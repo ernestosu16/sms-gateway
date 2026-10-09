@@ -232,6 +232,38 @@ definitions:
     - StatusFailed
     - StatusReceived
     - StatusRead
+  models.ModemProfile:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      steps:
+        items:
+          $ref: '#/definitions/models.ProfileStep'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  models.ModemProfileRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      steps:
+        items:
+          $ref: '#/definitions/models.ProfileStep'
+        type: array
+    type: object
   models.ModemSignalResponse:
     properties:
       quality:
@@ -242,6 +274,25 @@ definitions:
   models.ModemStatusResponse:
     properties:
       status:
+        type: string
+    type: object
+  models.ProfileCommand:
+    properties:
+      command:
+        type: string
+      expect:
+        description: |-
+          Expect is an optional case-insensitive regular expression the response
+          must match for the command to count as passed.
+        type: string
+    type: object
+  models.ProfileStep:
+    properties:
+      commands:
+        items:
+          $ref: '#/definitions/models.ProfileCommand'
+        type: array
+      title:
         type: string
     type: object
   models.SendSMSRequest:
@@ -871,6 +922,201 @@ paths:
       security:
       - BearerAuth: []
       summary: AT command reference
+      tags:
+      - Modem
+  /api/v1/modem/profiles:
+    get:
+      description: Returns the carrier setup profiles, ordered by name. Requires admin
+        privileges.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ModemProfile'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List modem profiles
+      tags:
+      - Modem
+    post:
+      consumes:
+      - application/json
+      description: 'Creates a carrier setup profile: ordered steps of AT commands,
+        each with an optional case-insensitive regular expression its response must
+        match. Requires admin privileges.'
+      parameters:
+      - description: Profile to create
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ModemProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.ModemProfile'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create modem profile
+      tags:
+      - Modem
+  /api/v1/modem/profiles/{id}:
+    delete:
+      description: Permanently deletes a carrier setup profile. Requires admin privileges.
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message: modem profile deleted'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete modem profile
+      tags:
+      - Modem
+    get:
+      description: Returns a carrier setup profile by ID. Requires admin privileges.
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ModemProfile'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get modem profile
+      tags:
+      - Modem
+    put:
+      consumes:
+      - application/json
+      description: Replaces a carrier setup profile's name, description, notes and
+        steps. Requires admin privileges.
+      parameters:
+      - description: Profile ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New profile contents
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ModemProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ModemProfile'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update modem profile
       tags:
       - Modem
   /api/v1/modem/signal:

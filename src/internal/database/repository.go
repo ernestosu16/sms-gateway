@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -1101,4 +1102,114 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// --- Modem profiles ---
+
+// modemProfileColumns is the column list shared by every modem profile SELECT.
+const modemProfileColumns = `id, name, description, notes, steps, created_at, updated_at`
+
+// CreateModemProfile inserts a new modem profile and returns it.
+func (r *Repository) CreateModemProfile(p *models.ModemProfile) (*models.ModemProfile, error) {
+	steps, err := json.Marshal(p.Steps)
+	if err != nil {
+		return nil, fmt.Errorf("encoding modem profile steps: %w", err)
+	}
+	id := uuid.New().String()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_, err = r.db.Exec(
+		`INSERT INTO modem_profiles (id, name, description, notes, steps, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, p.Name, p.Description, p.Notes, string(steps), now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating modem profile: %w", err)
+	}
+	return r.GetModemProfile(id)
+}
+
+// GetModemProfile retrieves a modem profile by ID. The error wraps
+// sql.ErrNoRows when no profile has that ID.
+func (r *Repository) GetModemProfile(id string) (*models.ModemProfile, error) {
+	row := r.db.QueryRow(`SELECT `+modemProfileColumns+` FROM modem_profiles WHERE id = ?`, id)
+	return scanModemProfile(row)
+}
+
+// ListModemProfiles returns every modem profile ordered by name.
+func (r *Repository) ListModemProfiles() ([]models.ModemProfile, error) {
+	rows, err := r.db.Query(`SELECT ` + modemProfileColumns + ` FROM modem_profiles ORDER BY name, id`)
+	if err != nil {
+		return nil, fmt.Errorf("listing modem profiles: %w", err)
+	}
+	defer rows.Close()
+
+	var profiles []models.ModemProfile
+	for rows.Next() {
+		p, err := scanModemProfile(rows)
+		if err != nil {
+			return nil, err
+		}
+		profiles = append(profiles, *p)
+	}
+	return profiles, rows.Err()
+}
+
+// UpdateModemProfile saves every editable field of p and returns the stored
+// profile. The error wraps sql.ErrNoRows when no profile has p.ID.
+func (r *Repository) UpdateModemProfile(p *models.ModemProfile) (*models.ModemProfile, error) {
+	steps, err := json.Marshal(p.Steps)
+	if err != nil {
+		return nil, fmt.Errorf("encoding modem profile steps: %w", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := r.db.Exec(
+		`UPDATE modem_profiles SET name = ?, description = ?, notes = ?, steps = ?, updated_at = ? WHERE id = ?`,
+		p.Name, p.Description, p.Notes, string(steps), now, p.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("updating modem profile: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("checking rows affected: %w", err)
+	}
+	if rows == 0 {
+		return nil, fmt.Errorf("updating modem profile: %w", sql.ErrNoRows)
+	}
+	return r.GetModemProfile(p.ID)
+}
+
+// DeleteModemProfile permanently removes a modem profile by ID. The error wraps
+// sql.ErrNoRows when no profile has that ID.
+func (r *Repository) DeleteModemProfile(id string) error {
+	result, err := r.db.Exec(`DELETE FROM modem_profiles WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting modem profile: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deleting modem profile: %w", sql.ErrNoRows)
+	}
+	return nil
+}
+
+func scanModemProfile(s scannable) (*models.ModemProfile, error) {
+	var p models.ModemProfile
+	var steps, createdAt, updatedAt string
+	if err := s.Scan(&p.ID, &p.Name, &p.Description, &p.Notes, &steps, &createdAt, &updatedAt); err != nil {
+		return nil, fmt.Errorf("scanning modem profile: %w", err)
+	}
+	if err := json.Unmarshal([]byte(steps), &p.Steps); err != nil {
+		return nil, fmt.Errorf("decoding modem profile steps: %w", err)
+	}
+	if p.Steps == nil {
+		p.Steps = []models.ProfileStep{}
+	}
+	p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return &p, nil
 }

@@ -43,12 +43,23 @@ func TestMockModem_GetSignal(t *testing.T) {
 
 func TestMockModem_SendAT(t *testing.T) {
 	m := NewMockModem()
-	resp, err := m.SendAT("AT+CSQ")
-	if err != nil {
-		t.Fatalf("SendAT() error = %v", err)
+
+	tests := []struct {
+		cmd  string
+		want string
+	}{
+		{"AT+CSQ", "\r\n+CSQ: 20,99\r\n\r\nOK\r\n"},
+		{" at+cpin? ", "\r\n+CPIN: READY\r\n\r\nOK\r\n"},
+		{"AT+CMNB=1", "\r\nOK\r\n"},
 	}
-	if resp == "" {
-		t.Error("SendAT() returned empty response")
+	for _, tt := range tests {
+		resp, err := m.SendAT(tt.cmd)
+		if err != nil {
+			t.Fatalf("SendAT(%q) error = %v", tt.cmd, err)
+		}
+		if resp != tt.want {
+			t.Errorf("SendAT(%q) = %q, want %q", tt.cmd, resp, tt.want)
+		}
 	}
 }
 

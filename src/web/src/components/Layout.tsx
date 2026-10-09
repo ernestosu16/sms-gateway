@@ -19,6 +19,7 @@ import {
   ResizeHandle,
   SidebarIcon,
   SignalIcon,
+  SlidersIcon,
   UsersIcon,
   WebhookIcon,
   XIcon,
@@ -43,6 +44,7 @@ const navSections: {
       { to: '/webhooks', label: 'nav.webhooks', Icon: WebhookIcon },
       { to: '/users', label: 'nav.users', Icon: UsersIcon },
       { to: '/modem', label: 'nav.modemTest', Icon: SignalIcon },
+      { to: '/modem-setup', label: 'nav.modemSetup', Icon: SlidersIcon },
     ],
   },
 ];

@@ -9,6 +9,7 @@ import APIKeys from '@/pages/APIKeys';
 import Webhooks from '@/pages/Webhooks';
 import Users from '@/pages/Users';
 import ModemTest from '@/pages/ModemTest';
+import ModemSetup from '@/pages/ModemSetup';
 import { lazy, type ReactNode } from 'react';
 
 // The phone-number metadata (libphonenumber-js) is only needed by these
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/users" element={<Users />} />
         <Route path="/modem" element={<ModemTest />} />
+        <Route path="/modem-setup" element={<ModemSetup />} />
       </Route>
     </Routes>
   );

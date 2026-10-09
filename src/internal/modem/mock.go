@@ -2,8 +2,8 @@ package modem
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"strings"
 	"sync"
 )
 
@@ -47,10 +47,42 @@ func (m *MockModem) GetSignal() (int, error) {
 	return 20, nil
 }
 
-// SendAT simulates sending a raw AT command.
+// mockATReplies holds the information lines a registered LTE-M modem returns
+// for common queries, keyed by the upper-cased command. They are consistent
+// with GetSignal and with a SIM that is ready and registered, so carrier
+// setup checks pass in dev mode.
+var mockATReplies = map[string]string{
+	"ATI":       "SIMCOM_SIM7080G\r\nRevision:mock",
+	"AT+CPIN?":  "+CPIN: READY",
+	"AT+CFUN?":  "+CFUN: 1",
+	"AT+CMNB?":  "+CMNB: 1",
+	"AT+CNMP?":  "+CNMP: 38",
+	"AT+CREG?":  "+CREG: 0,1",
+	"AT+CEREG?": "+CEREG: 2,1",
+	"AT+COPS?":  `+COPS: 0,0,"Tello",9`,
+	"AT+CSQ":    "+CSQ: 20,99",
+	"AT+CMGF?":  "+CMGF: 1",
+	"AT+CSCA?":  `+CSCA: "+12063130004",145`,
+	"AT+CPSI?":  "+CPSI: LTE CAT-M1,Online,310-260,0x1A2B,12345678,100,EUTRAN-BAND12,5110,3,3,-10,-90,-60,15",
+	"AT+CPMS?":  `+CPMS: "SM",0,50,"SM",0,50,"SM",0,50`,
+	"AT+CNMI?":  "+CNMI: 2,1,0,0,0",
+	"AT+CMEE?":  "+CMEE: 1",
+	"AT+CGMI":   "SIMCOM INCORPORATED",
+	"AT+CGMM":   "SIMCOM_SIM7080G",
+	"AT+CIMI":   "310260000000000",
+	"AT+CCID":   "8901260000000000000",
+	"AT+CGSN":   "860000000000000",
+}
+
+// SendAT simulates sending a raw AT command. Known queries get a realistic
+// reply framed the way the serial modem returns it (echo off); anything else,
+// including set commands, just succeeds.
 func (m *MockModem) SendAT(cmd string) (string, error) {
 	log.Printf("[mock modem] SendAT: %s", cmd)
-	return fmt.Sprintf("OK (mock response to %s)", cmd), nil
+	if info, ok := mockATReplies[strings.ToUpper(strings.TrimSpace(cmd))]; ok {
+		return "\r\n" + info + "\r\n\r\nOK\r\n", nil
+	}
+	return "\r\nOK\r\n", nil
 }
 
 // StartReceiver does nothing in mock mode.
