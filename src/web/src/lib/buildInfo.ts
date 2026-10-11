@@ -27,15 +27,14 @@ function loadBuild(): Promise<string | null> {
  * The running build as "version · commit", so an operator can tell whether an
  * update landed. Null until loaded or when unavailable.
  */
-export function useBuildInfo(enabled = true): string | null {
+export function useBuildInfo(): string | null {
   const [build, setBuild] = useState<string | null>(null);
   useEffect(() => {
-    if (!enabled) return;
     let active = true;
     void loadBuild().then((b) => active && setBuild(b));
     return () => {
       active = false;
     };
-  }, [enabled]);
+  }, []);
   return build;
 }

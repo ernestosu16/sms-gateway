@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { useBuildInfo } from '@/lib/buildInfo';
 import { cn } from '@/lib/cn';
 import { useI18n } from '@/lib/i18n';
 import { formatNumber } from '@/lib/format';
@@ -92,6 +93,7 @@ export default function Layout() {
     collapsedWidth: 72,
   });
   const unread = useMessageStats()?.unread ?? 0;
+  const build = useBuildInfo();
   // The chat manages its own scrolling panes, so it fills the main area edge to
   // edge instead of sitting in the padded, scrolling page container.
   const fullBleed = pathname.startsWith('/chats');
@@ -326,6 +328,13 @@ export default function Layout() {
               </Suspense>
             </div>
           </main>
+        )}
+
+        {/* Fixed footer naming the running build, so an operator can confirm an update landed. */}
+        {build && (
+          <footer className="shrink-0 truncate border-t border-border bg-surface px-4 py-1 text-right text-[11px] text-fg-muted sm:px-6 lg:px-8">
+            {t('preferences.version')}: <span className="font-mono">{build}</span>
+          </footer>
         )}
       </div>
     </div>
