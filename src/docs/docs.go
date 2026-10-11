@@ -1458,7 +1458,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Sends an SMS message to the specified phone number via the GSM modem.",
+                "description": "Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1489,6 +1489,107 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Destination country not allowed by the send policy",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sms/send-policy": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns which destination countries outbound SMS may be sent to. Inbound SMS is never restricted.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SMS"
+                ],
+                "summary": "Get send country policy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SendCountryPolicy"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets which destination countries outbound SMS may be sent to: mode \"all\" allows every number, \"none\" blocks every send, and \"selected\" only allows international numbers from the listed ISO 3166-1 alpha-2 countries. Requires admin privileges.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SMS"
+                ],
+                "summary": "Update send country policy",
+                "parameters": [
+                    {
+                        "description": "Policy (updated_at is ignored)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SendCountryPolicy"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SendCountryPolicy"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -2622,6 +2723,46 @@ const docTemplate = `{
                     }
                 },
                 "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.SendCountryMode": {
+            "type": "string",
+            "enum": [
+                "all",
+                "none",
+                "selected"
+            ],
+            "x-enum-varnames": [
+                "SendCountriesAll",
+                "SendCountriesNone",
+                "SendCountriesSelected"
+            ]
+        },
+        "models.SendCountryPolicy": {
+            "type": "object",
+            "properties": {
+                "countries": {
+                    "description": "Countries holds ISO 3166-1 alpha-2 codes, upper case and sorted. Only\nused when Mode is \"selected\".",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "US",
+                        "CA"
+                    ]
+                },
+                "mode": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.SendCountryMode"
+                        }
+                    ],
+                    "example": "selected"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }

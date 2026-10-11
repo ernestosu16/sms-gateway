@@ -54,6 +54,7 @@ const es: Record<MessageKey, string> = {
   'nav.users': 'Usuarios',
   'nav.modemTest': 'Prueba de módem',
   'nav.modemSetup': 'Configuración del módem',
+  'nav.sendPolicy': 'Países de envío',
   'nav.main': 'Principal',
   'nav.expand': 'Expandir navegación',
   'nav.collapse': 'Contraer navegación',
@@ -551,6 +552,34 @@ const es: Record<MessageKey, string> = {
   'modemSetup.seed.step.checkRegistration': 'Comprobar el registro en la red',
   'modemSetup.seed.step.configureSms': 'Configurar y comprobar SMS',
   'modemSetup.seed.step.listSms': 'Consultar los mensajes SMS',
+
+  // Send country policy
+  'sendPolicy.description':
+    'Elige a qué países se pueden enviar SMS. El servidor lo aplica a la WebUI y a todo cliente de la API, para controlar los costos de envío.',
+  'sendPolicy.loadFailed': 'No se pudo cargar la política de envío.',
+  'sendPolicy.saveFailed': 'No se pudo guardar la política de envío.',
+  'sendPolicy.saved': 'Política de envío guardada.',
+  'sendPolicy.modeTitle': 'Destinos permitidos',
+  'sendPolicy.inboundNote':
+    'Solo se restringe el envío; los mensajes se reciben de cualquier país.',
+  'sendPolicy.mode.all': 'Todos los países',
+  'sendPolicy.mode.none': 'Ninguno',
+  'sendPolicy.mode.selected': 'Países seleccionados',
+  'sendPolicy.modeHint.all': 'Se pueden enviar SMS a cualquier número.',
+  'sendPolicy.modeHint.none': 'El envío de SMS está desactivado. Todo envío se rechaza.',
+  'sendPolicy.modeHint.selected':
+    'Solo se pueden enviar SMS a números internacionales (+ y código de país) de los países seleccionados. Los números locales y códigos cortos se rechazan.',
+  'sendPolicy.noneWarning': 'No se podrá enviar ningún mensaje mientras esta política esté activa.',
+  'sendPolicy.countriesTitle': 'Países seleccionados',
+  'sendPolicy.countriesCount.one': '{count} país seleccionado',
+  'sendPolicy.countriesCount.other': '{count} países seleccionados',
+  'sendPolicy.clear': 'Limpiar',
+  'sendPolicy.remove': 'Quitar {name}',
+  'sendPolicy.selectAtLeastOne': 'Selecciona al menos un país.',
+  'sendPolicy.searchPlaceholder': 'Buscar por nombre, código o +prefijo',
+  'sendPolicy.noMatches': 'Ningún país coincide.',
+  'sendPolicy.sharedCodeNote':
+    'Los países que comparten prefijo (p. ej. +1 para EE. UU., Canadá y el Caribe) se distinguen por el propio número.',
 };
 
 export default es;

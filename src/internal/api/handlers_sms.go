@@ -80,13 +80,14 @@ func NewSMSHandler(repo *database.Repository, m modem.Modem, webhooks *webhook.D
 // HandleSendSMS sends an SMS message.
 //
 // @Summary      Send SMS
-// @Description  Sends an SMS message to the specified phone number via the GSM modem.
+// @Description  Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy.
 // @Tags         SMS
 // @Accept       json
 // @Produce      json
 // @Param        request  body      models.SendSMSRequest   true  "SMS message to send"
 // @Success      200      {object}  models.SendSMSResponse
 // @Failure      400      {object}  models.ErrorResponse
+// @Failure      403      {object}  models.ErrorResponse  "Destination country not allowed by the send policy"
 // @Failure      500      {object}  models.ErrorResponse
 // @Security     BearerAuth
 // @Security     ApiKeyAuth
@@ -107,6 +108,17 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := modem.ValidateSMS(req.To, req.Body); err != nil {
 		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// Only outbound SMS is restricted by country; inbound is always accepted.
+	policy, err := h.repo.GetSendCountryPolicy()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to load send policy"})
+		return
+	}
+	if err := policy.CheckDestination(req.To); err != nil {
+		writeJSON(w, http.StatusForbidden, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 

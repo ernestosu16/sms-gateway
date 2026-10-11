@@ -55,6 +55,7 @@ const en = {
   'nav.users': 'Users',
   'nav.modemTest': 'Modem Test',
   'nav.modemSetup': 'Modem Setup',
+  'nav.sendPolicy': 'Send Countries',
   'nav.main': 'Main',
   'nav.expand': 'Expand navigation',
   'nav.collapse': 'Collapse navigation',
@@ -548,6 +549,33 @@ const en = {
   'modemSetup.seed.step.checkRegistration': 'Check network registration',
   'modemSetup.seed.step.configureSms': 'Configure and check SMS',
   'modemSetup.seed.step.listSms': 'List SMS messages',
+
+  // Send country policy
+  'sendPolicy.description':
+    'Choose which countries outbound SMS can be sent to. Enforced by the server for the WebUI and every API client, to keep sending costs under control.',
+  'sendPolicy.loadFailed': 'Could not load the send policy.',
+  'sendPolicy.saveFailed': 'Could not save the send policy.',
+  'sendPolicy.saved': 'Send policy saved.',
+  'sendPolicy.modeTitle': 'Allowed destinations',
+  'sendPolicy.inboundNote': 'Only sending is restricted; messages are received from any country.',
+  'sendPolicy.mode.all': 'All countries',
+  'sendPolicy.mode.none': 'None',
+  'sendPolicy.mode.selected': 'Selected countries',
+  'sendPolicy.modeHint.all': 'SMS can be sent to any number.',
+  'sendPolicy.modeHint.none': 'Sending SMS is disabled. Every send is rejected.',
+  'sendPolicy.modeHint.selected':
+    'SMS can only be sent to international numbers (+ and country code) from the selected countries. Local numbers and short codes are rejected.',
+  'sendPolicy.noneWarning': 'No messages can be sent while this policy is active.',
+  'sendPolicy.countriesTitle': 'Selected countries',
+  'sendPolicy.countriesCount.one': '{count} country selected',
+  'sendPolicy.countriesCount.other': '{count} countries selected',
+  'sendPolicy.clear': 'Clear',
+  'sendPolicy.remove': 'Remove {name}',
+  'sendPolicy.selectAtLeastOne': 'Select at least one country.',
+  'sendPolicy.searchPlaceholder': 'Search by name, code or +prefix',
+  'sendPolicy.noMatches': 'No countries match.',
+  'sendPolicy.sharedCodeNote':
+    'Countries that share a calling code (e.g. +1 for the US, Canada and the Caribbean) are told apart by the number itself.',
 } as const;
 
 export type MessageKey = keyof typeof en;

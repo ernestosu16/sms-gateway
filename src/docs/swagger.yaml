@@ -319,6 +319,35 @@ definitions:
       title:
         type: string
     type: object
+  models.SendCountryMode:
+    enum:
+    - all
+    - none
+    - selected
+    type: string
+    x-enum-varnames:
+    - SendCountriesAll
+    - SendCountriesNone
+    - SendCountriesSelected
+  models.SendCountryPolicy:
+    properties:
+      countries:
+        description: |-
+          Countries holds ISO 3166-1 alpha-2 codes, upper case and sorted. Only
+          used when Mode is "selected".
+        example:
+        - US
+        - CA
+        items:
+          type: string
+        type: array
+      mode:
+        allOf:
+        - $ref: '#/definitions/models.SendCountryMode'
+        example: selected
+      updated_at:
+        type: string
+    type: object
   models.SendSMSRequest:
     properties:
       body:
@@ -1565,7 +1594,7 @@ paths:
       consumes:
       - application/json
       description: Sends an SMS message to the specified phone number via the GSM
-        modem.
+        modem. The destination must be allowed by the send country policy.
       parameters:
       - description: SMS message to send
         in: body
@@ -1584,6 +1613,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Destination country not allowed by the send policy
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -1592,6 +1625,69 @@ paths:
       - BearerAuth: []
       - ApiKeyAuth: []
       summary: Send SMS
+      tags:
+      - SMS
+  /api/v1/sms/send-policy:
+    get:
+      description: Returns which destination countries outbound SMS may be sent to.
+        Inbound SMS is never restricted.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SendCountryPolicy'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - ApiKeyAuth: []
+      summary: Get send country policy
+      tags:
+      - SMS
+    put:
+      consumes:
+      - application/json
+      description: 'Sets which destination countries outbound SMS may be sent to:
+        mode "all" allows every number, "none" blocks every send, and "selected" only
+        allows international numbers from the listed ISO 3166-1 alpha-2 countries.
+        Requires admin privileges.'
+      parameters:
+      - description: Policy (updated_at is ignored)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SendCountryPolicy'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SendCountryPolicy'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update send country policy
       tags:
       - SMS
   /api/v1/sms/stats:

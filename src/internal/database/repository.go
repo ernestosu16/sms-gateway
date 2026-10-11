@@ -1213,3 +1213,35 @@ func scanModemProfile(s scannable) (*models.ModemProfile, error) {
 	p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 	return &p, nil
 }
+
+// --- Send country policy ---
+
+// GetSendCountryPolicy returns the policy restricting outbound SMS by country.
+func (r *Repository) GetSendCountryPolicy() (*models.SendCountryPolicy, error) {
+	var mode, countries, updatedAt string
+	err := r.db.QueryRow(`SELECT mode, countries, updated_at FROM send_country_policy WHERE id = 1`).
+		Scan(&mode, &countries, &updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("getting send country policy: %w", err)
+	}
+	p := &models.SendCountryPolicy{Mode: models.SendCountryMode(mode), Countries: []string{}}
+	if countries != "" {
+		p.Countries = strings.Split(countries, ",")
+	}
+	p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return p, nil
+}
+
+// SaveSendCountryPolicy replaces the send country policy and returns it as
+// stored. Callers validate mode and countries.
+func (r *Repository) SaveSendCountryPolicy(mode models.SendCountryMode, countries []string) (*models.SendCountryPolicy, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.Exec(
+		`UPDATE send_country_policy SET mode = ?, countries = ?, updated_at = ? WHERE id = 1`,
+		string(mode), strings.Join(countries, ","), now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("saving send country policy: %w", err)
+	}
+	return r.GetSendCountryPolicy()
+}

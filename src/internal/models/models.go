@@ -1,8 +1,12 @@
 package models
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/nyaruka/phonenumbers"
 )
 
 // Direction represents the direction of a message.
@@ -327,4 +331,70 @@ type ChangePasswordResponse struct {
 // ErrorResponse represents an API error.
 type ErrorResponse struct {
 	Error string `json:"error"`
+}
+
+// SendCountryMode selects which countries outbound SMS may go to.
+type SendCountryMode string
+
+const (
+	// SendCountriesAll allows every destination, including numbers whose
+	// country cannot be determined. It is the default.
+	SendCountriesAll SendCountryMode = "all"
+	// SendCountriesNone blocks every outbound SMS.
+	SendCountriesNone SendCountryMode = "none"
+	// SendCountriesSelected only allows numbers in one of Countries.
+	SendCountriesSelected SendCountryMode = "selected"
+)
+
+// SendCountryPolicy restricts the destinations of outbound SMS by country.
+// Inbound SMS is never restricted.
+type SendCountryPolicy struct {
+	Mode SendCountryMode `json:"mode" example:"selected"`
+	// Countries holds ISO 3166-1 alpha-2 codes, upper case and sorted. Only
+	// used when Mode is "selected".
+	Countries []string  `json:"countries" example:"US,CA"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// PhoneCountry returns the ISO 3166-1 alpha-2 region of an international
+// number ("+" and digits), or "" when it cannot be determined, as for local
+// numbers, short codes and alphanumeric senders.
+func PhoneCountry(phone string) string {
+	if !strings.HasPrefix(phone, "+") {
+		return ""
+	}
+	num, err := phonenumbers.Parse(phone, "")
+	if err != nil {
+		return ""
+	}
+	region := phonenumbers.GetRegionCodeForNumber(num)
+	if region == phonenumbers.UNKNOWN_REGION {
+		return ""
+	}
+	return region
+}
+
+// IsSupportedCountry reports whether code is a region PhoneCountry can return.
+func IsSupportedCountry(code string) bool {
+	return phonenumbers.GetSupportedRegions()[code]
+}
+
+// CheckDestination returns an error explaining why the policy blocks sending
+// to phone, or nil when it is allowed.
+func (p SendCountryPolicy) CheckDestination(phone string) error {
+	switch p.Mode {
+	case SendCountriesAll:
+		return nil
+	case SendCountriesSelected:
+		country := PhoneCountry(phone)
+		if country == "" {
+			return fmt.Errorf("sending is limited to selected countries; use an international number (+ and country code) from one of them")
+		}
+		if slices.Contains(p.Countries, country) {
+			return nil
+		}
+		return fmt.Errorf("sending SMS to %s numbers is not allowed", country)
+	default:
+		return fmt.Errorf("sending SMS is disabled")
+	}
 }

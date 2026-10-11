@@ -11,6 +11,7 @@ import PreferencesMenu from '@/components/PreferencesMenu';
 import {
   ContactIcon,
   DashboardIcon,
+  GlobeIcon,
   KeyIcon,
   LoadingState,
   LogoutIcon,
@@ -43,6 +44,7 @@ const navSections: {
       { to: '/apikeys', label: 'nav.apiKeys', Icon: KeyIcon },
       { to: '/webhooks', label: 'nav.webhooks', Icon: WebhookIcon },
       { to: '/users', label: 'nav.users', Icon: UsersIcon },
+      { to: '/send-policy', label: 'nav.sendPolicy', Icon: GlobeIcon },
       { to: '/modem', label: 'nav.modemTest', Icon: SignalIcon },
       { to: '/modem-setup', label: 'nav.modemSetup', Icon: SlidersIcon },
     ],

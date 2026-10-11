@@ -1,4 +1,10 @@
-import { AsYouType, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/min';
+import {
+  AsYouType,
+  getCountries,
+  getCountryCallingCode,
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from 'libphonenumber-js/min';
 import { getLocale } from '@/lib/i18n';
 
 // E.164 caps a number at 15 digits including the country code.
@@ -77,4 +83,24 @@ export function describePhone(stored: string): PhoneDetails {
     flag: country && flagEmoji(country),
     valid: parsed.isValid(),
   };
+}
+
+export interface CountryOption {
+  code: CountryCode;
+  name: string;
+  flag: string;
+  callingCode: string;
+}
+
+/** Every country with a numbering plan, sorted by name in the UI language. */
+export function listCountries(): CountryOption[] {
+  const locale = getLocale();
+  return getCountries()
+    .map((code) => ({
+      code,
+      name: countryName(code),
+      flag: flagEmoji(code),
+      callingCode: getCountryCallingCode(code),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, locale));
 }

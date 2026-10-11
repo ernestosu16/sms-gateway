@@ -54,6 +54,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 	userHandler := NewUserHandler(repo)
 	webhookHandler := NewWebhookHandler(repo)
 	contactHandler := NewContactHandler(repo)
+	sendPolicyHandler := NewSendPolicyHandler(repo)
 	healthHandler := NewHealthHandler(repo, m)
 
 	// Auth middleware shortcuts.
@@ -86,6 +87,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 		r.Put("/api/v1/sms/{id}/unread", smsHandler.HandleMarkUnread)
 		r.Delete("/api/v1/sms/{id}", smsHandler.HandleDeleteMessage)
 		r.Post("/api/v1/sms/send", smsHandler.HandleSendSMS)
+		r.Get("/api/v1/sms/send-policy", sendPolicyHandler.HandleGetSendPolicy)
 
 		r.Get("/api/v1/modem/status", modemHandler.HandleModemStatus)
 		r.Get("/api/v1/modem/signal", modemHandler.HandleModemSignal)
@@ -117,6 +119,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 		r.Post("/api/v1/modem/at", modemHandler.HandleSendATCommand)
 		r.Get("/api/v1/modem/at/commands", modemHandler.HandleATCatalog)
 		r.Get("/api/v1/modem/info", modemHandler.HandleModemInfo)
+		r.Put("/api/v1/sms/send-policy", sendPolicyHandler.HandleUpdateSendPolicy)
 		r.Get("/api/v1/modem/profiles", modemProfileHandler.HandleListModemProfiles)
 		r.Post("/api/v1/modem/profiles", modemProfileHandler.HandleCreateModemProfile)
 		r.Get("/api/v1/modem/profiles/{id}", modemProfileHandler.HandleGetModemProfile)

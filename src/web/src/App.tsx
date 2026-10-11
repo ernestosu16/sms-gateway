@@ -17,6 +17,7 @@ import { lazy, type ReactNode } from 'react';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Chats = lazy(() => import('@/pages/Chats'));
 const Contacts = lazy(() => import('@/pages/Contacts'));
+const SendPolicy = lazy(() => import('@/pages/SendPolicy'));
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, mustChangePassword } = useAuth();
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/users" element={<Users />} />
         <Route path="/modem" element={<ModemTest />} />
         <Route path="/modem-setup" element={<ModemSetup />} />
+        <Route path="/send-policy" element={<SendPolicy />} />
       </Route>
     </Routes>
   );
