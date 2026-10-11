@@ -72,6 +72,45 @@ func TestHandleModemInfo(t *testing.T) {
 	}
 }
 
+// countingModem counts the AT commands sent to the mock modem.
+type countingModem struct {
+	*modem.MockModem
+	sent int
+}
+
+func (m *countingModem) SendAT(cmd string) (string, error) {
+	m.sent++
+	return m.MockModem.SendAT(cmd)
+}
+
+func TestHandleModemInfoCached(t *testing.T) {
+	m := &countingModem{MockModem: modem.NewMockModem()}
+	handler := NewModemHandler(m)
+
+	get := func(url string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		handler.HandleModemInfo(w, httptest.NewRequest(http.MethodGet, url, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s: status = %d, want %d", url, w.Code, http.StatusOK)
+		}
+	}
+
+	get("/api/v1/modem/info")
+	first := m.sent
+	if first == 0 {
+		t.Fatal("first request sent no AT commands")
+	}
+	get("/api/v1/modem/info")
+	if m.sent != first {
+		t.Errorf("cached request sent %d AT commands, want 0", m.sent-first)
+	}
+	get("/api/v1/modem/info?refresh=true")
+	if m.sent != 2*first {
+		t.Errorf("refresh sent %d AT commands, want %d", m.sent-first, first)
+	}
+}
+
 func TestHandleSendATCommand(t *testing.T) {
 	mock := modem.NewMockModem()
 	handler := NewModemHandler(mock)

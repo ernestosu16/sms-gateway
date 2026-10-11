@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"log"
 	"net/http"
@@ -11,8 +12,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	smsgateway "github.com/mattboston/sms-gateway"
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/mattboston/sms-gateway/internal/config"
 	"github.com/mattboston/sms-gateway/internal/database"
+	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
 	"github.com/mattboston/sms-gateway/internal/webhook"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -144,7 +147,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 			// If the request is for an API route, return 404.
 			if strings.HasPrefix(r.URL.Path, "/api/") {
-				writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+				writeError(w, http.StatusNotFound, "not_found", "not found")
 				return
 			}
 
@@ -173,4 +176,33 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Printf("failed to encode JSON response: %v", err)
 	}
+}
+
+// writeError answers status with a fixed error code and English message.
+func writeError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, models.ErrorResponse{Error: message, Code: code})
+}
+
+// writeAppError answers status with err, keeping the code and params of an
+// *apperr.Error so clients can translate it. Any other error is sent as is.
+func writeAppError(w http.ResponseWriter, status int, err error) {
+	var appErr *apperr.Error
+	if errors.As(err, &appErr) {
+		writeJSON(w, status, models.ErrorResponse{Error: appErr.Message, Code: appErr.Code, Params: appErr.Params})
+		return
+	}
+	writeJSON(w, status, models.ErrorResponse{Error: err.Error()})
+}
+
+// writeInternalError answers 500 with message, which only helps diagnose the
+// failure; clients show their own text for the action that failed.
+func writeInternalError(w http.ResponseWriter, message string) {
+	writeError(w, http.StatusInternalServerError, "internal_error", message)
+}
+
+// errNameRequired and nameTooLong validate the name of any named resource.
+var errNameRequired = apperr.New("name_required", "name is required", nil)
+
+func nameTooLong(max int) *apperr.Error {
+	return apperr.New("name_too_long", "name must be at most {max} characters", apperr.Params{"max": max})
 }

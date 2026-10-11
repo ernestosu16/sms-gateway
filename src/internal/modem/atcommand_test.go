@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/mattboston/sms-gateway/internal/apperr"
 )
 
 func TestValidateATCommand(t *testing.T) {
@@ -30,8 +32,9 @@ func TestValidateATCommand(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ValidateATCommand(%q) error = %v, wantErr %v", tt.cmd, err, tt.wantErr)
 			}
-			if err != nil && !errors.Is(err, ErrInvalidATCommand) {
-				t.Errorf("error %v does not wrap ErrInvalidATCommand", err)
+			var appErr *apperr.Error
+			if err != nil && !errors.As(err, &appErr) {
+				t.Errorf("error %v is not an *apperr.Error", err)
 			}
 		})
 	}

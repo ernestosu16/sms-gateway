@@ -8,6 +8,8 @@ import (
 	"net/netip"
 	"syscall"
 	"time"
+
+	"github.com/mattboston/sms-gateway/internal/apperr"
 )
 
 // metadataAddrs are cloud instance-metadata endpoints outside the link-local
@@ -28,13 +30,13 @@ func CheckDestination(ip netip.Addr) error {
 	ip = ip.Unmap()
 	switch {
 	case ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsInterfaceLocalMulticast():
-		return fmt.Errorf("link-local address %s is not allowed", ip)
+		return apperr.New("address_link_local", "link-local address {address} is not allowed", apperr.Params{"address": ip.String()})
 	case ip.IsMulticast(), ip.IsUnspecified():
-		return fmt.Errorf("address %s is not allowed", ip)
+		return apperr.New("address_not_allowed", "address {address} is not allowed", apperr.Params{"address": ip.String()})
 	}
 	for _, m := range metadataAddrs {
 		if ip == m {
-			return fmt.Errorf("cloud metadata address %s is not allowed", ip)
+			return apperr.New("address_cloud_metadata", "cloud metadata address {address} is not allowed", apperr.Params{"address": ip.String()})
 		}
 	}
 	return nil

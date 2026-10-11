@@ -4,15 +4,16 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/webhook"
@@ -51,19 +52,19 @@ func NewWebhookHandler(repo *database.Repository) *WebhookHandler {
 func (h *WebhookHandler) HandleListWebhooks(w http.ResponseWriter, r *http.Request) {
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	hooks, err := h.repo.ListWebhooks(opts)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list webhooks"})
+		writeInternalError(w, "failed to list webhooks")
 		return
 	}
 
 	total, err := h.repo.CountWebhooks()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count webhooks"})
+		writeInternalError(w, "failed to count webhooks")
 		return
 	}
 
@@ -88,11 +89,11 @@ func (h *WebhookHandler) HandleListWebhooks(w http.ResponseWriter, r *http.Reque
 func (h *WebhookHandler) HandleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 	var req models.WebhookRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 	if err := normalizeWebhookRequest(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -100,7 +101,7 @@ func (h *WebhookHandler) HandleCreateWebhook(w http.ResponseWriter, r *http.Requ
 	if secret == "" {
 		generated, err := webhook.GenerateSecret()
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to generate webhook secret"})
+			writeInternalError(w, "failed to generate webhook secret")
 			return
 		}
 		secret = generated
@@ -109,7 +110,7 @@ func (h *WebhookHandler) HandleCreateWebhook(w http.ResponseWriter, r *http.Requ
 
 	hook, err := h.repo.CreateWebhook(req.Name, req.URL, secret, req.Events, isActive)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to create webhook"})
+		writeInternalError(w, "failed to create webhook")
 		return
 	}
 
@@ -136,11 +137,11 @@ func (h *WebhookHandler) HandleCreateWebhook(w http.ResponseWriter, r *http.Requ
 func (h *WebhookHandler) HandleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
 	var req models.WebhookRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 	if err := normalizeWebhookRequest(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -196,10 +197,10 @@ func (h *WebhookHandler) HandleDeleteWebhook(w http.ResponseWriter, r *http.Requ
 // other repository failure.
 func writeWebhookError(w http.ResponseWriter, err error, msg string) {
 	if errors.Is(err, sql.ErrNoRows) {
-		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "webhook not found"})
+		writeError(w, http.StatusNotFound, "webhook_not_found", "webhook not found")
 		return
 	}
-	writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: msg})
+	writeInternalError(w, msg)
 }
 
 // normalizeWebhookRequest trims req in place, removes duplicate events and
@@ -210,35 +211,35 @@ func normalizeWebhookRequest(req *models.WebhookRequest) error {
 	req.Secret = strings.TrimSpace(req.Secret)
 
 	if req.Name == "" {
-		return errors.New("name is required")
+		return errNameRequired
 	}
 	if utf8.RuneCountInString(req.Name) > maxWebhookNameLength {
-		return fmt.Errorf("name must be at most %d characters", maxWebhookNameLength)
+		return nameTooLong(maxWebhookNameLength)
 	}
 
 	u, err := url.Parse(req.URL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("url must be an absolute http or https URL")
+		return apperr.New("webhook_url_invalid", "url must be an absolute http or https URL", nil)
 	}
 	// Hostnames are checked again when each delivery dials, after DNS
 	// resolution; a literal IP can be refused right away.
 	if ip, err := netip.ParseAddr(u.Hostname()); err == nil {
 		if err := webhook.CheckDestination(ip); err != nil {
-			return fmt.Errorf("url: %w", err)
+			return apperr.New("webhook_url_not_allowed", "url: {reason}", apperr.Params{"reason": err})
 		}
 	}
 
 	if req.Secret != "" && len(req.Secret) < minWebhookSecretLength {
-		return fmt.Errorf("secret must be at least %d characters", minWebhookSecretLength)
+		return apperr.New("webhook_secret_too_short", "secret must be at least {min} characters", apperr.Params{"min": minWebhookSecretLength})
 	}
 
 	if len(req.Events) == 0 {
-		return errors.New("at least one event is required")
+		return apperr.New("webhook_events_required", "at least one event is required", nil)
 	}
 	events := make([]models.WebhookEvent, 0, len(req.Events))
 	for _, e := range req.Events {
 		if !slices.Contains(models.WebhookEvents, e) {
-			return fmt.Errorf("unknown event %q", e)
+			return apperr.New("webhook_unknown_event", "unknown event {event}", apperr.Params{"event": strconv.Quote(string(e))})
 		}
 		if !slices.Contains(events, e) {
 			events = append(events, e)

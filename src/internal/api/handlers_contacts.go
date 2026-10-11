@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 )
@@ -29,13 +29,13 @@ func NewContactHandler(repo *database.Repository) *ContactHandler {
 func validateContactName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", errors.New("name is required")
+		return "", errNameRequired
 	}
 	if utf8.RuneCountInString(name) > models.MaxContactNameRunes {
-		return "", fmt.Errorf("name must be at most %d characters", models.MaxContactNameRunes)
+		return "", nameTooLong(models.MaxContactNameRunes)
 	}
 	if strings.IndexFunc(name, unicode.IsControl) >= 0 {
-		return "", errors.New("name must not contain control characters")
+		return "", apperr.New("name_control_characters", "name must not contain control characters", nil)
 	}
 	return name, nil
 }
@@ -58,19 +58,19 @@ func validateContactName(name string) (string, error) {
 func (h *ContactHandler) HandleListContacts(w http.ResponseWriter, r *http.Request) {
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 	search := r.URL.Query().Get("q")
 
 	contacts, err := h.repo.ListContacts(search, opts)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list contacts"})
+		writeInternalError(w, "failed to list contacts")
 		return
 	}
 	total, err := h.repo.CountContacts(search)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count contacts"})
+		writeInternalError(w, "failed to count contacts")
 		return
 	}
 	writePage(w, contacts, total)
@@ -99,18 +99,18 @@ func (h *ContactHandler) HandleSaveContact(w http.ResponseWriter, r *http.Reques
 
 	var req models.ContactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 	name, err := validateContactName(req.Name)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	contact, err := h.repo.SaveContact(phone, name)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to save contact"})
+		writeInternalError(w, "failed to save contact")
 		return
 	}
 	writeJSON(w, http.StatusOK, contact)
@@ -138,10 +138,10 @@ func (h *ContactHandler) HandleDeleteContact(w http.ResponseWriter, r *http.Requ
 
 	if err := h.repo.DeleteContact(phone); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "contact not found"})
+			writeError(w, http.StatusNotFound, "contact_not_found", "contact not found")
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to delete contact"})
+		writeInternalError(w, "failed to delete contact")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})

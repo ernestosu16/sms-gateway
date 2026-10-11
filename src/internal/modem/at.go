@@ -1,7 +1,6 @@
 package modem
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -9,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/warthog618/sms"
 	"github.com/warthog618/sms/encoding/pdumode"
 	"github.com/warthog618/sms/encoding/tpdu"
@@ -270,7 +270,7 @@ func encodeSubmitPDUs(enc *sms.Encoder, to, body string) ([]submitPDU, error) {
 var recipientPattern = regexp.MustCompile(`^(\+[1-9][0-9]{6,14}|[0-9]{3,6})$`)
 
 // ErrInvalidRecipient explains the accepted recipient format.
-var ErrInvalidRecipient = errors.New("recipient must be an international number with + and country code (e.g. +15551234567) or a 3-6 digit short code")
+var ErrInvalidRecipient = apperr.New("invalid_recipient", "recipient must be an international number with + and country code (e.g. +15551234567) or a 3-6 digit short code", nil)
 
 // ValidateSMS rejects input that would escape the AT+CMGS command.
 //
@@ -284,11 +284,11 @@ func ValidateSMS(to, body string) error {
 		return ErrInvalidRecipient
 	}
 	if n := len([]rune(body)); n > maxBodyRunes {
-		return fmt.Errorf("body is %d characters long; the maximum is %d", n, maxBodyRunes)
+		return apperr.New("body_too_long", "body is {length} characters long; the maximum is {max}", apperr.Params{"length": n, "max": maxBodyRunes})
 	}
 	for _, r := range body {
 		if (r < 0x20 && r != '\n' && r != '\r') || r == 0x7F {
-			return fmt.Errorf("body contains control character %U", r)
+			return apperr.New("body_control_character", "body contains control character {char}", apperr.Params{"char": fmt.Sprintf("%U", r)})
 		}
 	}
 	return nil

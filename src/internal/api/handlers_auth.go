@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/mattboston/sms-gateway/internal/auth"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
@@ -18,7 +18,7 @@ import (
 // password changes, matching the web UI.
 const minPasswordLength = 8
 
-var passwordTooShort = fmt.Sprintf("password must be at least %d characters", minPasswordLength)
+var errPasswordTooShort = apperr.New("password_too_short", "password must be at least {min} characters", apperr.Params{"min": minPasswordLength})
 
 // dummyPasswordHash is checked when a login names an unknown user, so unknown
 // and existing usernames cost the same bcrypt time and cannot be told apart.
@@ -53,25 +53,25 @@ func NewAuthHandler(repo *database.Repository, jwtSecret string) *AuthHandler {
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 
 	if req.Username == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "username and password are required"})
+		writeError(w, http.StatusBadRequest, "credentials_required", "username and password are required")
 		return
 	}
 
 	// Checked before the password so a blocked guess reveals nothing.
 	if wait := h.throttle.retryAfter(req.Username); wait > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second)/time.Second)))
-		writeJSON(w, http.StatusTooManyRequests, models.ErrorResponse{Error: "too many failed login attempts, try again later"})
+		writeError(w, http.StatusTooManyRequests, "too_many_login_attempts", "too many failed login attempts, try again later")
 		return
 	}
 
 	user, err := h.repo.GetUserByUsername(req.Username)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to load user"})
+		writeInternalError(w, "failed to load user")
 		return
 	}
 	hash := dummyPasswordHash
@@ -80,14 +80,14 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if !auth.CheckPassword(req.Password, hash) || user == nil {
 		h.throttle.fail(req.Username)
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "invalid credentials"})
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid credentials")
 		return
 	}
 	h.throttle.reset(req.Username)
 
 	token, err := auth.GenerateJWT(h.jwtSecret, user.ID, user.IsAdmin, user.TokenVersion)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to generate token"})
+		writeInternalError(w, "failed to generate token")
 		return
 	}
 
@@ -111,12 +111,12 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	claims := GetUserFromContext(r.Context())
 	if claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+		writeError(w, http.StatusUnauthorized, "authentication_required", "authentication required")
 		return
 	}
 
 	if err := h.repo.RevokeTokens(claims.UserID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to log out"})
+		writeInternalError(w, "failed to log out")
 		return
 	}
 
@@ -140,44 +140,44 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims := GetUserFromContext(r.Context())
 	if claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+		writeError(w, http.StatusUnauthorized, "authentication_required", "authentication required")
 		return
 	}
 
 	var req models.ChangePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 
 	if req.CurrentPassword == "" || req.NewPassword == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "current_password and new_password are required"})
+		writeError(w, http.StatusBadRequest, "passwords_required", "current_password and new_password are required")
 		return
 	}
 	if len(req.NewPassword) < minPasswordLength {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: passwordTooShort})
+		writeAppError(w, http.StatusBadRequest, errPasswordTooShort)
 		return
 	}
 
 	user, err := h.repo.GetUserByID(claims.UserID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to get user"})
+		writeInternalError(w, "failed to get user")
 		return
 	}
 
 	if !auth.CheckPassword(req.CurrentPassword, user.PasswordHash) {
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "current password is incorrect"})
+		writeError(w, http.StatusUnauthorized, "current_password_incorrect", "current password is incorrect")
 		return
 	}
 
 	hash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to hash password"})
+		writeInternalError(w, "failed to hash password")
 		return
 	}
 
 	if err := h.repo.UpdatePassword(user.ID, hash); err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to update password"})
+		writeInternalError(w, "failed to update password")
 		return
 	}
 
@@ -185,12 +185,12 @@ func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Reques
 	// caller a fresh one at the new token version.
 	user, err = h.repo.GetUserByID(user.ID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to get user"})
+		writeInternalError(w, "failed to get user")
 		return
 	}
 	token, err := auth.GenerateJWT(h.jwtSecret, user.ID, user.IsAdmin, user.TokenVersion)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to generate token"})
+		writeInternalError(w, "failed to generate token")
 		return
 	}
 

@@ -39,13 +39,13 @@ func NewKeyHandler(repo *database.Repository) *KeyHandler {
 func (h *KeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	claims := GetUserFromContext(r.Context())
 	if claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+		writeError(w, http.StatusUnauthorized, "authentication_required", "authentication required")
 		return
 	}
 
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -60,13 +60,13 @@ func (h *KeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 		keys, err = h.repo.ListAPIKeysByUserID(scope, opts)
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list API keys"})
+		writeInternalError(w, "failed to list API keys")
 		return
 	}
 
 	total, err := h.repo.CountAPIKeys(scope)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count API keys"})
+		writeInternalError(w, "failed to count API keys")
 		return
 	}
 
@@ -90,25 +90,25 @@ func (h *KeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 func (h *KeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	claims := GetUserFromContext(r.Context())
 	if claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+		writeError(w, http.StatusUnauthorized, "authentication_required", "authentication required")
 		return
 	}
 
 	var req models.CreateAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 
 	key, err := auth.GenerateAPIKey()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to generate API key"})
+		writeInternalError(w, "failed to generate API key")
 		return
 	}
 
 	apiKey, err := h.repo.CreateAPIKey(key, req.Label, claims.UserID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to create API key"})
+		writeInternalError(w, "failed to create API key")
 		return
 	}
 
@@ -157,22 +157,22 @@ func (h *KeyHandler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) 
 func (h *KeyHandler) changeAPIKey(w http.ResponseWriter, r *http.Request, change func(id, userID string) error, okMsg, failMsg string) {
 	claims := GetUserFromContext(r.Context())
 	if claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+		writeError(w, http.StatusUnauthorized, "authentication_required", "authentication required")
 		return
 	}
 
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "API key id is required"})
+		writeError(w, http.StatusBadRequest, "api_key_id_required", "API key id is required")
 		return
 	}
 
 	if err := change(id, apiKeyScope(claims)); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "API key not found"})
+			writeError(w, http.StatusNotFound, "api_key_not_found", "API key not found")
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: failMsg})
+		writeInternalError(w, failMsg)
 		return
 	}
 

@@ -86,6 +86,7 @@ export interface ModemHealth {
   signalError: string;
   infoError: string;
   refreshing: boolean;
+  /** Reloads everything, reading the modem and SIM details from the modem again. */
   refresh: () => void;
 }
 
@@ -131,11 +132,15 @@ export function useModemHealth({ withInfo = false }: { withInfo?: boolean } = {}
     }
   }, [t]);
 
-  const fetchInfo = useCallback(async () => {
+  // The server caches the details until it restarts; refresh reads them
+  // from the modem again.
+  const fetchInfo = useCallback(async (refresh: boolean) => {
     setInfoLoading(true);
     setInfoError('');
     try {
-      const response = await api.get<ModemInfo>('/modem/info');
+      const response = await api.get<ModemInfo>('/modem/info', {
+        params: refresh ? { refresh: true } : undefined,
+      });
       setInfo(response.data);
     } catch {
       setInfoError(t('modem.infoFailed'));
@@ -144,15 +149,20 @@ export function useModemHealth({ withInfo = false }: { withInfo?: boolean } = {}
     }
   }, [t]);
 
-  const refresh = useCallback(() => {
-    fetchStatus();
-    fetchSignal();
-    if (withInfo) fetchInfo();
-  }, [fetchStatus, fetchSignal, fetchInfo, withInfo]);
+  const load = useCallback(
+    (refreshInfo: boolean) => {
+      fetchStatus();
+      fetchSignal();
+      if (withInfo) fetchInfo(refreshInfo);
+    },
+    [fetchStatus, fetchSignal, fetchInfo, withInfo],
+  );
+
+  const refresh = useCallback(() => load(true), [load]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    load(false);
+  }, [load]);
 
   return {
     status,

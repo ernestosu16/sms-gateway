@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 )
@@ -35,7 +36,7 @@ func NewSendPolicyHandler(repo *database.Repository) *SendPolicyHandler {
 func (h *SendPolicyHandler) HandleGetSendPolicy(w http.ResponseWriter, _ *http.Request) {
 	policy, err := h.repo.GetSendCountryPolicy()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to load send policy"})
+		writeInternalError(w, "failed to load send policy")
 		return
 	}
 	writeJSON(w, http.StatusOK, policy)
@@ -59,7 +60,7 @@ func (h *SendPolicyHandler) HandleGetSendPolicy(w http.ResponseWriter, _ *http.R
 func (h *SendPolicyHandler) HandleUpdateSendPolicy(w http.ResponseWriter, r *http.Request) {
 	var req models.SendCountryPolicy
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 
@@ -71,7 +72,7 @@ func (h *SendPolicyHandler) HandleUpdateSendPolicy(w http.ResponseWriter, r *htt
 		for _, c := range req.Countries {
 			c = strings.ToUpper(strings.TrimSpace(c))
 			if !models.IsSupportedCountry(c) {
-				writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "unknown country code: " + c})
+				writeAppError(w, http.StatusBadRequest, apperr.New("unknown_country_code", "unknown country code: {country}", apperr.Params{"country": c}))
 				return
 			}
 			countries = append(countries, c)
@@ -79,17 +80,17 @@ func (h *SendPolicyHandler) HandleUpdateSendPolicy(w http.ResponseWriter, r *htt
 		slices.Sort(countries)
 		countries = slices.Compact(countries)
 		if len(countries) == 0 {
-			writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "select at least one country"})
+			writeError(w, http.StatusBadRequest, "select_at_least_one_country", "select at least one country")
 			return
 		}
 	default:
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: `mode must be "all", "none" or "selected"`})
+		writeError(w, http.StatusBadRequest, "invalid_send_mode", `mode must be "all", "none" or "selected"`)
 		return
 	}
 
 	policy, err := h.repo.SaveSendCountryPolicy(req.Mode, countries)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to save send policy"})
+		writeInternalError(w, "failed to save send policy")
 		return
 	}
 	writeJSON(w, http.StatusOK, policy)

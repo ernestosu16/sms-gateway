@@ -1,9 +1,9 @@
 package modem
 
 import (
-	"errors"
-	"fmt"
 	"strings"
+
+	"github.com/mattboston/sms-gateway/internal/apperr"
 )
 
 // ATRisk says what running a command can do to the modem or the gateway.
@@ -81,27 +81,25 @@ type ATCommandInfo struct {
 // limit keeps a typo or paste from flooding the serial line.
 const maxATCommandLength = 256
 
-// ErrInvalidATCommand wraps every syntax error from ValidateATCommand.
-var ErrInvalidATCommand = errors.New("invalid AT command")
-
 // ValidateATCommand checks that cmd is a single line of printable ASCII
 // starting with AT. Control characters are refused because the serial
 // protocol gives them meaning: CR or LF would end the command early and start
-// another, and Ctrl-Z would submit a pending SMS.
+// another, and Ctrl-Z would submit a pending SMS. Every error it returns is an
+// *apperr.Error.
 func ValidateATCommand(cmd string) error {
 	if cmd == "" {
-		return fmt.Errorf("%w: command is required", ErrInvalidATCommand)
+		return apperr.New("at_command_required", "invalid AT command: command is required", nil)
 	}
 	if len(cmd) > maxATCommandLength {
-		return fmt.Errorf("%w: longer than %d characters", ErrInvalidATCommand, maxATCommandLength)
+		return apperr.New("at_command_too_long", "invalid AT command: longer than {max} characters", apperr.Params{"max": maxATCommandLength})
 	}
 	for i := 0; i < len(cmd); i++ {
 		if c := cmd[i]; c < 0x20 || c > 0x7e {
-			return fmt.Errorf("%w: only printable ASCII characters are allowed", ErrInvalidATCommand)
+			return apperr.New("at_command_not_ascii", "invalid AT command: only printable ASCII characters are allowed", nil)
 		}
 	}
 	if !strings.HasPrefix(strings.ToUpper(cmd), "AT") {
-		return fmt.Errorf("%w: must start with AT", ErrInvalidATCommand)
+		return apperr.New("at_command_prefix", "invalid AT command: must start with AT", nil)
 	}
 	return nil
 }

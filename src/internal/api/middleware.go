@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/mattboston/sms-gateway/internal/auth"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
@@ -37,13 +38,13 @@ func jwtMiddleware(jwtSecret string, repo *database.Repository, allowPendingPass
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokenStr := extractJWT(r)
 			if tokenStr == "" {
-				writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "missing or invalid token"})
+				writeError(w, http.StatusUnauthorized, "invalid_token", "missing or invalid token")
 				return
 			}
 
-			claims, status, msg := authenticateJWT(jwtSecret, repo, tokenStr, allowPendingPasswordChange)
+			claims, status, err := authenticateJWT(jwtSecret, repo, tokenStr, allowPendingPasswordChange)
 			if claims == nil {
-				writeJSON(w, status, models.ErrorResponse{Error: msg})
+				writeAppError(w, status, err)
 				return
 			}
 
@@ -56,29 +57,29 @@ func jwtMiddleware(jwtSecret string, repo *database.Repository, allowPendingPass
 // authenticateJWT validates tokenStr and loads its user. On success it returns
 // the claims with IsAdmin taken from the database, so a token cannot outlive
 // its user, a logout or password change, or privileges the user no longer has. Otherwise it returns nil
-// with the status and message to answer.
-func authenticateJWT(jwtSecret string, repo *database.Repository, tokenStr string, allowPendingPasswordChange bool) (*auth.JWTClaims, int, string) {
+// with the status and error to answer.
+func authenticateJWT(jwtSecret string, repo *database.Repository, tokenStr string, allowPendingPasswordChange bool) (*auth.JWTClaims, int, *apperr.Error) {
 	claims, err := auth.ValidateJWT(jwtSecret, tokenStr)
 	if err != nil {
-		return nil, http.StatusUnauthorized, "invalid token"
+		return nil, http.StatusUnauthorized, apperr.New("invalid_token", "invalid token", nil)
 	}
 
 	user, err := repo.GetUserByID(claims.UserID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, http.StatusUnauthorized, "invalid token"
+		return nil, http.StatusUnauthorized, apperr.New("invalid_token", "invalid token", nil)
 	}
 	if err != nil {
-		return nil, http.StatusInternalServerError, "failed to load user"
+		return nil, http.StatusInternalServerError, apperr.New("internal_error", "failed to load user", nil)
 	}
 	if claims.TokenVersion != user.TokenVersion {
-		return nil, http.StatusUnauthorized, "token revoked"
+		return nil, http.StatusUnauthorized, apperr.New("token_revoked", "token revoked", nil)
 	}
 	if user.MustChangePassword && !allowPendingPasswordChange {
-		return nil, http.StatusForbidden, "password change required"
+		return nil, http.StatusForbidden, apperr.New("password_change_required", "password change required", nil)
 	}
 
 	claims.IsAdmin = user.IsAdmin
-	return claims, 0, ""
+	return claims, 0, nil
 }
 
 // KeyMiddleware validates API keys from the X-API-Key header.
@@ -87,13 +88,13 @@ func KeyMiddleware(repo *database.Repository) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := r.Header.Get("X-API-Key")
 			if key == "" {
-				writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "missing API key"})
+				writeError(w, http.StatusUnauthorized, "missing_api_key", "missing API key")
 				return
 			}
 
 			apiKey, err := repo.GetAPIKeyByKey(key)
 			if err != nil {
-				writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "invalid API key"})
+				writeError(w, http.StatusUnauthorized, "invalid_api_key", "invalid API key")
 				return
 			}
 
@@ -110,14 +111,14 @@ func CombinedAuthMiddleware(jwtSecret string, repo *database.Repository) func(ht
 			// Try JWT first. A token that fails validation falls through to the
 			// API key, but a valid token refused for another reason is final.
 			if tokenStr := extractJWT(r); tokenStr != "" {
-				claims, status, msg := authenticateJWT(jwtSecret, repo, tokenStr, false)
+				claims, status, err := authenticateJWT(jwtSecret, repo, tokenStr, false)
 				if claims != nil {
 					ctx := context.WithValue(r.Context(), contextKeyUser, claims)
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
 				if status != http.StatusUnauthorized {
-					writeJSON(w, status, models.ErrorResponse{Error: msg})
+					writeAppError(w, status, err)
 					return
 				}
 			}
@@ -132,7 +133,7 @@ func CombinedAuthMiddleware(jwtSecret string, repo *database.Repository) func(ht
 				}
 			}
 
-			writeJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "authentication required"})
+			writeError(w, http.StatusUnauthorized, "authentication_required", "authentication required")
 		})
 	}
 }
@@ -142,7 +143,7 @@ func AdminMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		claims := GetUserFromContext(r.Context())
 		if claims == nil || !claims.IsAdmin {
-			writeJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "admin access required"})
+			writeError(w, http.StatusForbidden, "admin_access_required", "admin access required")
 			return
 		}
 		next.ServeHTTP(w, r)

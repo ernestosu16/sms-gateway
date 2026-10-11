@@ -19,6 +19,12 @@ type ModemHandler struct {
 	// command set of a modem does not change while it runs.
 	supportedMu sync.Mutex
 	supported   []string
+
+	// info caches the modem and SIM identity. It is read on the first request
+	// and kept for the life of the process, since the SIM and modem do not
+	// change while it runs; a request with refresh=true reads it again.
+	infoMu sync.Mutex
+	info   *modem.Info
 }
 
 // ATCatalogResponse is the AT command reference used by the console.
@@ -57,16 +63,17 @@ func (h *ModemHandler) HandleModemStatus(w http.ResponseWriter, _ *http.Request)
 // HandleModemInfo returns the modem and SIM identity (admin only).
 //
 // @Summary      Get modem and SIM details
-// @Description  Returns the line provider and network, the SIM phone number, ICCID and IMSI, and the modem IMEI, manufacturer, model and firmware. A field is empty when the modem or SIM cannot report it; many SIMs do not store their phone number. Requires admin privileges.
+// @Description  Returns the line provider and network, the SIM phone number, ICCID and IMSI, and the modem IMEI, manufacturer, model and firmware. A field is empty when the modem or SIM cannot report it; many SIMs do not store their phone number. The details are read once and cached until the service restarts; pass refresh=true to read them from the modem again. Requires admin privileges.
 // @Tags         Modem
 // @Produce      json
+// @Param        refresh  query     bool  false  "Read the details from the modem again instead of using the cached ones"
 // @Success      200  {object}  models.ModemInfoResponse
 // @Failure      401  {object}  models.ErrorResponse
 // @Failure      403  {object}  models.ErrorResponse
 // @Security     BearerAuth
 // @Router       /api/v1/modem/info [get]
-func (h *ModemHandler) HandleModemInfo(w http.ResponseWriter, _ *http.Request) {
-	i := modem.ReadInfo(h.modem)
+func (h *ModemHandler) HandleModemInfo(w http.ResponseWriter, r *http.Request) {
+	i := h.modemInfo(r.URL.Query().Get("refresh") == "true")
 	writeJSON(w, http.StatusOK, models.ModemInfoResponse{
 		Provider:     i.Provider,
 		Network:      i.Network,
@@ -94,7 +101,7 @@ func (h *ModemHandler) HandleModemInfo(w http.ResponseWriter, _ *http.Request) {
 func (h *ModemHandler) HandleModemSignal(w http.ResponseWriter, _ *http.Request) {
 	signal, err := h.modem.GetSignal()
 	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, models.ErrorResponse{Error: "failed to get signal strength"})
+		writeError(w, http.StatusServiceUnavailable, "signal_unavailable", "failed to get signal strength")
 		return
 	}
 
@@ -119,13 +126,13 @@ func (h *ModemHandler) HandleModemSignal(w http.ResponseWriter, _ *http.Request)
 func (h *ModemHandler) HandleSendATCommand(w http.ResponseWriter, r *http.Request) {
 	var req models.ATCommandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 
 	command := strings.TrimSpace(req.Command)
 	if err := modem.ValidateATCommand(command); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -148,7 +155,7 @@ func (h *ModemHandler) HandleSendATCommand(w http.ResponseWriter, r *http.Reques
 
 	resp, err := h.modem.SendAT(command)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -190,6 +197,26 @@ func (h *ModemHandler) supportedCommands() []string {
 		h.supported = names
 	}
 	return h.supported
+}
+
+// modemInfo returns the cached modem and SIM identity, reading it from the
+// modem when nothing is cached yet or refresh is set. A read that returns
+// nothing at all is not cached, so a modem that was busy or disconnected is
+// asked again next time.
+func (h *ModemHandler) modemInfo(refresh bool) modem.Info {
+	h.infoMu.Lock()
+	defer h.infoMu.Unlock()
+
+	if h.info != nil && !refresh {
+		return *h.info
+	}
+	i := modem.ReadInfo(h.modem)
+	if i == (modem.Info{}) {
+		h.info = nil
+	} else {
+		h.info = &i
+	}
+	return i
 }
 
 func signalQuality(signal int) string {

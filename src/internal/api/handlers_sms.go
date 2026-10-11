@@ -2,12 +2,12 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
@@ -37,7 +37,7 @@ func parseListOptions(r *http.Request) (database.ListOptions, error) {
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
 		if err != nil || limit < 0 {
-			return opts, fmt.Errorf("limit must be a non-negative integer")
+			return opts, apperr.New("invalid_limit", "limit must be a non-negative integer", nil)
 		}
 		if limit > maxPageSize {
 			limit = maxPageSize
@@ -48,7 +48,7 @@ func parseListOptions(r *http.Request) (database.ListOptions, error) {
 	if raw := r.URL.Query().Get("offset"); raw != "" {
 		offset, err := strconv.Atoi(raw)
 		if err != nil || offset < 0 {
-			return opts, fmt.Errorf("offset must be a non-negative integer")
+			return opts, apperr.New("invalid_offset", "offset must be a non-negative integer", nil)
 		}
 		opts.Offset = offset
 	}
@@ -95,7 +95,7 @@ func NewSMSHandler(repo *database.Repository, m modem.Modem, webhooks *webhook.D
 func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	var req models.SendSMSRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 
@@ -103,22 +103,22 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	// conversation view agree on who the message went to.
 	req.To = models.NormalizePhone(req.To)
 	if req.To == "" || req.Body == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "to and body are required"})
+		writeError(w, http.StatusBadRequest, "recipient_and_body_required", "to and body are required")
 		return
 	}
 	if err := modem.ValidateSMS(req.To, req.Body); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	// Only outbound SMS is restricted by country; inbound is always accepted.
 	policy, err := h.repo.GetSendCountryPolicy()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to load send policy"})
+		writeInternalError(w, "failed to load send policy")
 		return
 	}
 	if err := policy.CheckDestination(req.To); err != nil {
-		writeJSON(w, http.StatusForbidden, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusForbidden, err)
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	// Create the message in pending status.
 	msg, err := h.repo.CreateMessage(models.DirectionOutbound, req.To, req.Body, models.StatusPending, apiKeyID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to create message"})
+		writeInternalError(w, "failed to create message")
 		return
 	}
 
@@ -199,19 +199,19 @@ func (h *SMSHandler) HandleGetInbox(w http.ResponseWriter, r *http.Request) {
 
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	messages, err := h.repo.ListMessages(models.DirectionInbound, status, opts)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list messages"})
+		writeInternalError(w, "failed to list messages")
 		return
 	}
 
 	total, err := h.repo.CountMessages(models.DirectionInbound, status)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count messages"})
+		writeInternalError(w, "failed to count messages")
 		return
 	}
 
@@ -234,12 +234,12 @@ func (h *SMSHandler) HandleGetInbox(w http.ResponseWriter, r *http.Request) {
 func (h *SMSHandler) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "message id is required"})
+		writeError(w, http.StatusBadRequest, "message_id_required", "message id is required")
 		return
 	}
 
 	if err := h.repo.MarkMessageRead(id); err != nil {
-		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		writeError(w, http.StatusNotFound, "message_not_found", err.Error())
 		return
 	}
 
@@ -262,12 +262,12 @@ func (h *SMSHandler) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 func (h *SMSHandler) HandleMarkUnread(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "message id is required"})
+		writeError(w, http.StatusBadRequest, "message_id_required", "message id is required")
 		return
 	}
 
 	if err := h.repo.MarkMessageUnread(id); err != nil {
-		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		writeError(w, http.StatusNotFound, "message_not_found", err.Error())
 		return
 	}
 
@@ -291,19 +291,19 @@ func (h *SMSHandler) HandleMarkUnread(w http.ResponseWriter, r *http.Request) {
 func (h *SMSHandler) HandleGetOutbox(w http.ResponseWriter, r *http.Request) {
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	messages, err := h.repo.ListMessages(models.DirectionOutbound, nil, opts)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list messages"})
+		writeInternalError(w, "failed to list messages")
 		return
 	}
 
 	total, err := h.repo.CountMessages(models.DirectionOutbound, nil)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count messages"})
+		writeInternalError(w, "failed to count messages")
 		return
 	}
 
@@ -324,7 +324,7 @@ func (h *SMSHandler) HandleGetOutbox(w http.ResponseWriter, r *http.Request) {
 func (h *SMSHandler) HandleMessageStats(w http.ResponseWriter, _ *http.Request) {
 	stats, err := h.repo.MessageStats()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to compute message stats"})
+		writeInternalError(w, "failed to compute message stats")
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -346,12 +346,12 @@ func (h *SMSHandler) HandleMessageStats(w http.ResponseWriter, _ *http.Request) 
 func (h *SMSHandler) HandleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "message id is required"})
+		writeError(w, http.StatusBadRequest, "message_id_required", "message id is required")
 		return
 	}
 
 	if err := h.repo.DeleteMessage(id); err != nil {
-		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: err.Error()})
+		writeError(w, http.StatusNotFound, "message_not_found", err.Error())
 		return
 	}
 
@@ -374,13 +374,13 @@ func (h *SMSHandler) HandleDeleteMessage(w http.ResponseWriter, r *http.Request)
 func (h *SMSHandler) HandleGetMessage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "message id is required"})
+		writeError(w, http.StatusBadRequest, "message_id_required", "message id is required")
 		return
 	}
 
 	msg, err := h.repo.GetMessage(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "message not found"})
+		writeError(w, http.StatusNotFound, "message_not_found", "message not found")
 		return
 	}
 
@@ -393,7 +393,7 @@ func (h *SMSHandler) HandleGetMessage(w http.ResponseWriter, r *http.Request) {
 func conversationPhone(w http.ResponseWriter, r *http.Request) (string, bool) {
 	phone := models.NormalizePhone(r.URL.Query().Get("phone"))
 	if phone == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "phone is required"})
+		writeError(w, http.StatusBadRequest, "phone_required", "phone is required")
 		return "", false
 	}
 	return phone, true
@@ -417,20 +417,20 @@ func conversationPhone(w http.ResponseWriter, r *http.Request) (string, bool) {
 func (h *SMSHandler) HandleListConversations(w http.ResponseWriter, r *http.Request) {
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 	search := r.URL.Query().Get("q")
 
 	conversations, err := h.repo.ListConversations(search, opts)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list conversations"})
+		writeInternalError(w, "failed to list conversations")
 		return
 	}
 
 	total, err := h.repo.CountConversations(search)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count conversations"})
+		writeInternalError(w, "failed to count conversations")
 		return
 	}
 
@@ -460,7 +460,7 @@ func (h *SMSHandler) HandleGetConversationMessages(w http.ResponseWriter, r *htt
 
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -468,20 +468,20 @@ func (h *SMSHandler) HandleGetConversationMessages(w http.ResponseWriter, r *htt
 	if beforeID := r.URL.Query().Get("before_id"); beforeID != "" {
 		before, err = h.repo.GetMessage(beforeID)
 		if err != nil || before.PhoneNumber != phone {
-			writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "before_id is not a message in this conversation"})
+			writeError(w, http.StatusBadRequest, "invalid_before_id", "before_id is not a message in this conversation")
 			return
 		}
 	}
 
 	messages, err := h.repo.ListThread(phone, before, opts.Limit)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list messages"})
+		writeInternalError(w, "failed to list messages")
 		return
 	}
 
 	total, err := h.repo.CountThread(phone)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count messages"})
+		writeInternalError(w, "failed to count messages")
 		return
 	}
 
@@ -509,7 +509,7 @@ func (h *SMSHandler) HandleMarkConversationRead(w http.ResponseWriter, r *http.R
 
 	n, err := h.repo.MarkConversationRead(phone)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to mark conversation as read"})
+		writeInternalError(w, "failed to mark conversation as read")
 		return
 	}
 
@@ -537,7 +537,7 @@ func (h *SMSHandler) HandleDeleteConversation(w http.ResponseWriter, r *http.Req
 
 	n, err := h.repo.DeleteConversation(phone)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to delete conversation"})
+		writeInternalError(w, "failed to delete conversation")
 		return
 	}
 

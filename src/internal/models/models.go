@@ -1,11 +1,11 @@
 package models
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/mattboston/sms-gateway/internal/apperr"
 	"github.com/nyaruka/phonenumbers"
 )
 
@@ -328,9 +328,14 @@ type ChangePasswordResponse struct {
 	Token   string `json:"token"`
 }
 
-// ErrorResponse represents an API error.
+// ErrorResponse represents an API error. Code names the message and Params
+// fills its {placeholders}, so clients can show it in their own language; Error
+// is the English text. A param may itself be an object of this shape. Code is
+// "internal_error" for server failures, whose Error is only diagnostic.
 type ErrorResponse struct {
-	Error string `json:"error"`
+	Error  string         `json:"error"`
+	Code   string         `json:"code,omitempty" example:"invalid_request_body"`
+	Params map[string]any `json:"params,omitempty"`
 }
 
 // SendCountryMode selects which countries outbound SMS may go to.
@@ -388,13 +393,13 @@ func (p SendCountryPolicy) CheckDestination(phone string) error {
 	case SendCountriesSelected:
 		country := PhoneCountry(phone)
 		if country == "" {
-			return fmt.Errorf("sending is limited to selected countries; use an international number (+ and country code) from one of them")
+			return apperr.New("send_country_unknown", "sending is limited to selected countries; use an international number (+ and country code) from one of them", nil)
 		}
 		if slices.Contains(p.Countries, country) {
 			return nil
 		}
-		return fmt.Errorf("sending SMS to %s numbers is not allowed", country)
+		return apperr.New("send_country_blocked", "sending SMS to {country} numbers is not allowed", apperr.Params{"country": country})
 	default:
-		return fmt.Errorf("sending SMS is disabled")
+		return apperr.New("sending_disabled", "sending SMS is disabled", nil)
 	}
 }

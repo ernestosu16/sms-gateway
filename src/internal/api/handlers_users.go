@@ -39,19 +39,19 @@ func NewUserHandler(repo *database.Repository) *UserHandler {
 func (h *UserHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 	opts, err := parseListOptions(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		writeAppError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	users, err := h.repo.ListUsers(opts)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to list users"})
+		writeInternalError(w, "failed to list users")
 		return
 	}
 
 	total, err := h.repo.CountUsers()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to count users"})
+		writeInternalError(w, "failed to count users")
 		return
 	}
 
@@ -74,28 +74,28 @@ func (h *UserHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body"})
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "invalid request body")
 		return
 	}
 
 	if req.Username == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "username and password are required"})
+		writeError(w, http.StatusBadRequest, "credentials_required", "username and password are required")
 		return
 	}
 	if len(req.Password) < minPasswordLength {
-		writeJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: passwordTooShort})
+		writeAppError(w, http.StatusBadRequest, errPasswordTooShort)
 		return
 	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to hash password"})
+		writeInternalError(w, "failed to hash password")
 		return
 	}
 
 	user, err := h.repo.CreateUser(req.Username, hash, req.IsAdmin, false)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to create user"})
+		writeInternalError(w, "failed to create user")
 		return
 	}
 
@@ -119,11 +119,11 @@ func (h *UserHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	err := h.repo.DeleteUser(chi.URLParam(r, "id"))
 	switch {
 	case errors.Is(err, database.ErrAdminUserProtected):
-		writeJSON(w, http.StatusForbidden, models.ErrorResponse{Error: "administrator accounts cannot be deleted"})
+		writeError(w, http.StatusForbidden, "admin_user_protected", "administrator accounts cannot be deleted")
 	case errors.Is(err, sql.ErrNoRows):
-		writeJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "user not found"})
+		writeError(w, http.StatusNotFound, "user_not_found", "user not found")
 	case err != nil:
-		writeJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "failed to delete user"})
+		writeInternalError(w, "failed to delete user")
 	default:
 		writeJSON(w, http.StatusOK, map[string]string{"message": "user deleted"})
 	}
