@@ -132,3 +132,37 @@ func TestHandleCreateModemProfile_Validation(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleCreateModemProfile_ErrorCode checks that a refused command is
+// reported with codes the WebUI can translate, including the nested reason.
+func TestHandleCreateModemProfile_ErrorCode(t *testing.T) {
+	handler := NewModemProfileHandler(newListTestRepo(t))
+
+	body := `{"name":"a","steps":[{"title":"a","commands":[{"command":"AT"},{"command":"rm -rf"}]}]}`
+	w := httptest.NewRecorder()
+	handler.HandleCreateModemProfile(w, httptest.NewRequest(http.MethodPost, "/api/v1/modem/profiles", strings.NewReader(body)))
+
+	var got struct {
+		Error  string `json:"error"`
+		Code   string `json:"code"`
+		Params struct {
+			Step    int `json:"step"`
+			Command int `json:"command"`
+			Reason  struct {
+				Code string `json:"code"`
+			} `json:"reason"`
+		} `json:"params"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding error response: %v", err)
+	}
+	if got.Code != "profile_command_invalid" || got.Params.Step != 1 || got.Params.Command != 2 {
+		t.Errorf("response = %+v, want profile_command_invalid for step 1, command 2", got)
+	}
+	if got.Params.Reason.Code != "at_command_prefix" {
+		t.Errorf("reason code = %q, want at_command_prefix", got.Params.Reason.Code)
+	}
+	if want := "step 1, command 2: invalid AT command: must start with AT"; got.Error != want {
+		t.Errorf("error = %q, want %q", got.Error, want)
+	}
+}

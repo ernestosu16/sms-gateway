@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { isAxiosError } from 'axios';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 import en, { type MessageKey } from '@/locales/en';
@@ -83,14 +84,6 @@ function useProfileText() {
   return useCallback((text: string) => (isSeedKey(text) ? t(text) : text), [t]);
 }
 
-/** Prefers the server's validation message over a generic fallback. */
-function errorMessage(err: unknown, fallback: string): string {
-  if (isAxiosError(err) && typeof err.response?.data?.error === 'string') {
-    return err.response.data.error;
-  }
-  return fallback;
-}
-
 /**
  * Checks a response against a profile expectation. The server compiles the
  * same pattern case-insensitively when the profile is saved.
@@ -147,7 +140,7 @@ function ModemSetupManager() {
           return res.data.some((p) => p.id === wanted) ? wanted : (res.data[0]?.id ?? null);
         });
       } catch (err) {
-        setError(errorMessage(err, t('modemSetup.loadFailed')));
+        setError(apiErrorMessage(err, t('modemSetup.loadFailed')));
       } finally {
         setLoading(false);
       }
@@ -216,7 +209,11 @@ function ModemSetupManager() {
             failure = {
               step: s,
               command,
-              output: errorMessage(err, t('modemSetup.commandFailed')),
+              // A modem failure has no code; its text is the modem's own reply.
+              output: apiErrorMessage(
+                err,
+                (isAxiosError(err) && err.response?.data?.error) || t('modemSetup.commandFailed'),
+              ),
             };
           }
           if (failure) break;
@@ -249,7 +246,7 @@ function ModemSetupManager() {
       setRun(null);
       await load();
     } catch (err) {
-      setError(errorMessage(err, t('modemSetup.deleteFailed')));
+      setError(apiErrorMessage(err, t('modemSetup.deleteFailed')));
     }
   };
 
@@ -596,7 +593,7 @@ function ProfileEditor({ profile, onCancel, onSaved }: ProfileEditorProps) {
         : await api.post<ModemProfile>('/modem/profiles', payload);
       onSaved(res.data, !profile);
     } catch (err) {
-      setError(errorMessage(err, t('modemSetup.saveFailed')));
+      setError(apiErrorMessage(err, t('modemSetup.saveFailed')));
     } finally {
       setSaving(false);
     }

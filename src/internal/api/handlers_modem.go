@@ -144,10 +144,9 @@ func (h *ModemHandler) HandleSendATCommand(w http.ResponseWriter, r *http.Reques
 			Error:                "this command requires confirmation",
 			RequiresConfirmation: true,
 			Risk:                 string(class.Risk),
-			Warning:              class.Warning(),
 		}
 		if class.Info != nil {
-			resp.Title = class.Info.Title
+			resp.Name = &class.Info.Name
 		}
 		writeJSON(w, http.StatusConflict, resp)
 		return

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { t } from '@/lib/i18n';
+import { apiErrorMessage } from '@/lib/apiError';
 import {
   compareMessages,
   notifyConversationsChanged,
@@ -251,9 +251,7 @@ export function useThread(phone: string) {
       } catch (err) {
         // A 400 (e.g. a body over the modem's length limit) means the message
         // was never stored, so the reason only exists here.
-        const reason =
-          (isAxiosError(err) && (err.response?.data as { error?: string } | undefined)?.error) ||
-          t('chat.unreachable');
+        const reason = apiErrorMessage(err, t('chat.unreachable'));
         setMessages((prev) =>
           prev.map((m) =>
             m.id === temp.id ? { ...m, status: 'failed', error_message: reason } : m,

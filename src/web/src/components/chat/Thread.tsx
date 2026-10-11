@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { apiErrorMessage } from '@/lib/apiError';
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatDayLabel, isSameDay } from '@/lib/format';
 import { isDialable, MAX_CONTACT_NAME, notifyConversationsChanged } from '@/lib/messages';
@@ -175,10 +175,7 @@ export default function Thread({ phone, onBack, onDeleted }: ThreadProps) {
       setEditingName(false);
       setNotice(nameDraft.trim() ? t('thread.nameSaved') : t('thread.nameRemoved'));
     } catch (err) {
-      setNotice(
-        (isAxiosError(err) && (err.response?.data as { error?: string } | undefined)?.error) ||
-          t('thread.nameFailed'),
-      );
+      setNotice(apiErrorMessage(err, t('thread.nameFailed')));
     } finally {
       setSavingName(false);
     }

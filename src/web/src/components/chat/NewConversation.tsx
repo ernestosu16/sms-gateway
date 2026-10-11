@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { apiErrorMessage } from '@/lib/apiError';
 import {
   chatPath,
   isDialable,
@@ -39,10 +39,7 @@ export default function NewConversation({ onBack }: { onBack: () => void }) {
       navigate(chatPath(phone), { replace: true });
       return true;
     } catch (err) {
-      setError(
-        (isAxiosError(err) && (err.response?.data as { error?: string } | undefined)?.error) ||
-          t('chat.sendFailed'),
-      );
+      setError(apiErrorMessage(err, t('chat.sendFailed')));
       return false;
     } finally {
       setSending(false);

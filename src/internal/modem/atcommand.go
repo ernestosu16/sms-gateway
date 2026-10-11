@@ -38,42 +38,32 @@ const (
 	FormSet     ATFormKind = "set"     // AT+CMD=<args>, or ATE0 for basic commands
 )
 
-// ATForm documents one supported invocation of a command.
+// ATForm is one supported invocation of a command.
 type ATForm struct {
-	Kind        ATFormKind `json:"kind"`
-	Syntax      string     `json:"syntax"`
-	Description string     `json:"description"`
+	Kind   ATFormKind `json:"kind"`
+	Syntax string     `json:"syntax"`
 }
 
-// ATParamValue documents one accepted value of a parameter.
-type ATParamValue struct {
-	Value       string `json:"value"`
-	Description string `json:"description"`
-}
-
-// ATParam documents a command parameter.
+// ATParam is a command parameter and, when they are few, its accepted values.
 type ATParam struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Values      []ATParamValue `json:"values,omitempty"`
+	Name   string   `json:"name"`
+	Values []string `json:"values,omitempty"`
 }
 
-// ATCommandInfo is the reference entry for one AT command.
+// ATCommandInfo is the reference entry for one AT command. Its wording lives
+// in the WebUI, keyed by Name; see ATCatalog.
 type ATCommandInfo struct {
 	// Name is the command as written after "AT": "+CSQ", "&F", "I", or ""
 	// for the bare AT attention command.
-	Name        string    `json:"name"`
-	Title       string    `json:"title"`
-	Category    string    `json:"category"`
-	Description string    `json:"description"`
-	Forms       []ATForm  `json:"forms"`
-	Params      []ATParam `json:"params,omitempty"`
-	Response    string    `json:"response,omitempty"`
-	Example     string    `json:"example,omitempty"`
+	Name     string    `json:"name"`
+	Category string    `json:"category"`
+	Forms    []ATForm  `json:"forms"`
+	Params   []ATParam `json:"params,omitempty"`
+	Response string    `json:"response,omitempty"`
+	Example  string    `json:"example,omitempty"`
 	// Risk applies to the execute and set forms. Read and test forms never
 	// change anything and are always safe.
 	Risk      ATRisk `json:"risk"`
-	Warning   string `json:"warning,omitempty"`
 	Reference string `json:"reference,omitempty"`
 }
 
@@ -110,19 +100,6 @@ type ATClassification struct {
 	Info *ATCommandInfo
 	Kind ATFormKind
 	Risk ATRisk
-}
-
-// Warning explains why the command needs confirmation, or is empty.
-func (c ATClassification) Warning() string {
-	switch {
-	case c.Risk == RiskUnknown && c.Info == nil:
-		return "This command is not in the gateway's AT command reference, so its effect is unknown."
-	case c.Risk == RiskUnknown:
-		return "The command could not be fully recognised, for example because several commands are chained together."
-	case c.Info != nil:
-		return c.Info.Warning
-	}
-	return ""
 }
 
 var catalogIndex = func() map[string]*ATCommandInfo {

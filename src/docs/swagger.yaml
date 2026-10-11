@@ -59,15 +59,16 @@ definitions:
     properties:
       error:
         type: string
+      name:
+        description: |-
+          Name is the catalog name of the command ("+CFUN", "" for bare AT), or
+          absent when the catalog does not know it. Clients look up the warning
+          to show by this name.
+        type: string
       requires_confirmation:
         type: boolean
       risk:
         description: Risk is "dangerous" or "unknown".
-        type: string
-      title:
-        description: Title names the recognised command, when there is one.
-        type: string
-      warning:
         type: string
     type: object
   models.ChangePasswordRequest:
@@ -152,8 +153,14 @@ definitions:
     - DirectionOutbound
   models.ErrorResponse:
     properties:
+      code:
+        example: invalid_request_body
+        type: string
       error:
         type: string
+      params:
+        additionalProperties: {}
+        type: object
     type: object
   models.LoginRequest:
     properties:
@@ -433,8 +440,6 @@ definitions:
     properties:
       category:
         type: string
-      description:
-        type: string
       example:
         type: string
       forms:
@@ -460,15 +465,9 @@ definitions:
         description: |-
           Risk applies to the execute and set forms. Read and test forms never
           change anything and are always safe.
-      title:
-        type: string
-      warning:
-        type: string
     type: object
   modem.ATForm:
     properties:
-      description:
-        type: string
       kind:
         $ref: '#/definitions/modem.ATFormKind'
       syntax:
@@ -498,21 +497,12 @@ definitions:
     - FormSet
   modem.ATParam:
     properties:
-      description:
-        type: string
       name:
         type: string
       values:
         items:
-          $ref: '#/definitions/modem.ATParamValue'
+          type: string
         type: array
-    type: object
-  modem.ATParamValue:
-    properties:
-      description:
-        type: string
-      value:
-        type: string
     type: object
   modem.ATRisk:
     enum:

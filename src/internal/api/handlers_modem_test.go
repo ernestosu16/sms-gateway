@@ -181,8 +181,8 @@ func TestHandleSendATCommandConfirmation(t *testing.T) {
 				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 					t.Fatalf("decoding: %v", err)
 				}
-				if !resp.RequiresConfirmation || resp.Risk != tt.wantRisk || resp.Warning == "" {
-					t.Errorf("response = %+v, want requires_confirmation with risk %q and a warning", resp, tt.wantRisk)
+				if !resp.RequiresConfirmation || resp.Risk != tt.wantRisk {
+					t.Errorf("response = %+v, want requires_confirmation with risk %q", resp, tt.wantRisk)
 				}
 			}
 		})

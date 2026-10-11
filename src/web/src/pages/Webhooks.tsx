@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { isAxiosError } from 'axios';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import type { MessageKey } from '@/locales/en';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -60,14 +60,6 @@ const EVENT_OPTIONS: { value: WebhookEvent; label: MessageKey; description: Mess
 ];
 
 const DEFAULT_EVENTS: WebhookEvent[] = ['message.received'];
-
-/** Prefers the server's validation message over a generic fallback. */
-function errorMessage(err: unknown, fallback: string): string {
-  if (isAxiosError(err) && typeof err.response?.data?.error === 'string') {
-    return err.response.data.error;
-  }
-  return fallback;
-}
 
 /**
  * Builds a secret in the same shape the server generates: "whsec_" plus 32
@@ -181,7 +173,7 @@ function WebhookManager() {
       refresh();
     } catch (err) {
       setActionError(
-        errorMessage(err, editing ? t('webhooks.updateFailed') : t('webhooks.createFailed')),
+        apiErrorMessage(err, editing ? t('webhooks.updateFailed') : t('webhooks.createFailed')),
       );
     } finally {
       setSaving(false);
@@ -200,7 +192,7 @@ function WebhookManager() {
       });
       refresh();
     } catch (err) {
-      setActionError(errorMessage(err, t('webhooks.updateFailed')));
+      setActionError(apiErrorMessage(err, t('webhooks.updateFailed')));
     }
   };
 
@@ -218,7 +210,7 @@ function WebhookManager() {
       if (editing?.id === hook.id) resetForm();
       removeItems(new Set([hook.id]));
     } catch (err) {
-      setActionError(errorMessage(err, t('webhooks.deleteFailed')));
+      setActionError(apiErrorMessage(err, t('webhooks.deleteFailed')));
     }
   };
 

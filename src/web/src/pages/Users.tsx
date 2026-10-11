@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { isAxiosError } from 'axios';
 import { useAuth } from '@/lib/auth';
 import api from '@/lib/api';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import Pagination from '@/components/Pagination';
 import { usePaginatedList } from '@/lib/usePaginatedList';
@@ -114,8 +114,7 @@ export default function Users() {
       removeItems(new Set([u.id]));
       setSuccess(t('users.deleted', { name: u.username }));
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      setActionError(typeof message === 'string' ? message : t('users.deleteFailed'));
+      setActionError(apiErrorMessage(err, t('users.deleteFailed')));
     }
   };
 

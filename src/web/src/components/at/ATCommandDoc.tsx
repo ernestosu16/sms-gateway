@@ -1,4 +1,6 @@
 import {
+  atCategory,
+  atText,
   insertTextFor,
   setPrefixFor,
   type ATCommandInfo,
@@ -49,25 +51,26 @@ export default function ATCommandDoc({
   onParam,
 }: ATCommandDocProps) {
   const { t } = useI18n();
+  const text = atText(info.name);
   const setForm = info.forms.find((f) => f.kind === 'set');
   const placeholders = setForm ? [...setForm.syntax.matchAll(/<([^>]+)>/g)].map((m) => m[1]) : [];
   // Warnings only matter for the forms that act, not for reads and tests.
-  const showWarning = info.warning && (kind === undefined || kind === 'execute' || kind === 'set');
+  const showWarning = text.warning && (kind === undefined || kind === 'execute' || kind === 'set');
 
   return (
     <div className="space-y-4 rounded-lg border border-border bg-surface-muted p-4">
       <div className="flex flex-wrap items-center gap-2">
         <code className="font-mono text-sm font-semibold text-fg">AT{info.name}</code>
-        <span className="text-sm font-medium text-fg">{info.title}</span>
-        <Badge>{info.category}</Badge>
+        <span className="text-sm font-medium text-fg">{text.title}</span>
+        <Badge>{atCategory(info.category)}</Badge>
         <RiskBadge risk={risk} />
         {supported === false && <Badge tone="warning">{t('at.notReported')}</Badge>}
       </div>
 
-      <p className="text-sm text-fg-muted">{info.description}</p>
+      <p className="text-sm text-fg-muted">{text.description}</p>
 
       {showWarning && (
-        <Alert tone={info.risk === 'dangerous' ? 'danger' : 'info'}>{info.warning}</Alert>
+        <Alert tone={info.risk === 'dangerous' ? 'danger' : 'info'}>{text.warning}</Alert>
       )}
 
       <section>
@@ -86,7 +89,7 @@ export default function ATCommandDoc({
                 <code className="font-mono text-xs break-all text-primary sm:w-64 sm:shrink-0">
                   {form.syntax}
                 </code>
-                <span className="text-xs text-fg-muted">{form.description}</span>
+                <span className="text-xs text-fg-muted">{text.forms[form.kind]}</span>
               </button>
             </li>
           ))}
@@ -102,33 +105,34 @@ export default function ATCommandDoc({
             {info.params.map((param) => {
               const position = placeholders.indexOf(param.name);
               const prefix = setForm ? setPrefixFor(setForm.syntax) : '';
+              const paramText = text.params?.[param.name];
               return (
                 <div key={param.name}>
                   <dt className="text-xs">
                     <code className="font-mono font-semibold text-fg">&lt;{param.name}&gt;</code>{' '}
-                    <span className="text-fg-muted">{param.description}</span>
+                    <span className="text-fg-muted">{paramText?.description}</span>
                   </dt>
                   {param.values && (
                     <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                      {param.values.map((v) =>
+                      {param.values.map((value) =>
                         position >= 0 ? (
                           <button
-                            key={v.value}
+                            key={value}
                             type="button"
-                            onClick={() => onParam(prefix, position, v.value)}
+                            onClick={() => onParam(prefix, position, value)}
                             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs transition-colors hover:border-primary hover:bg-primary-soft/40"
-                            title={t('at.use', { value: v.value })}
+                            title={t('at.use', { value })}
                           >
-                            <code className="font-mono font-semibold text-primary">{v.value}</code>
-                            <span className="text-fg-muted">{v.description}</span>
+                            <code className="font-mono font-semibold text-primary">{value}</code>
+                            <span className="text-fg-muted">{paramText?.values?.[value]}</span>
                           </button>
                         ) : (
                           <span
-                            key={v.value}
+                            key={value}
                             className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
                           >
-                            <code className="font-mono font-semibold text-fg">{v.value}</code>
-                            <span className="text-fg-muted">{v.description}</span>
+                            <code className="font-mono font-semibold text-fg">{value}</code>
+                            <span className="text-fg-muted">{paramText?.values?.[value]}</span>
                           </span>
                         ),
                       )}

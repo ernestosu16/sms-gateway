@@ -2355,18 +2355,15 @@ const docTemplate = `{
                 "error": {
                     "type": "string"
                 },
+                "name": {
+                    "description": "Name is the catalog name of the command (\"+CFUN\", \"\" for bare AT), or\nabsent when the catalog does not know it. Clients look up the warning\nto show by this name.",
+                    "type": "string"
+                },
                 "requires_confirmation": {
                     "type": "boolean"
                 },
                 "risk": {
                     "description": "Risk is \"dangerous\" or \"unknown\".",
-                    "type": "string"
-                },
-                "title": {
-                    "description": "Title names the recognised command, when there is one.",
-                    "type": "string"
-                },
-                "warning": {
                     "type": "string"
                 }
             }
@@ -2493,8 +2490,16 @@ const docTemplate = `{
         "models.ErrorResponse": {
             "type": "object",
             "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "invalid_request_body"
+                },
                 "error": {
                     "type": "string"
+                },
+                "params": {
+                    "type": "object",
+                    "additionalProperties": {}
                 }
             }
         },
@@ -2899,9 +2904,6 @@ const docTemplate = `{
                 "category": {
                     "type": "string"
                 },
-                "description": {
-                    "type": "string"
-                },
                 "example": {
                     "type": "string"
                 },
@@ -2934,21 +2936,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/modem.ATRisk"
                         }
                     ]
-                },
-                "title": {
-                    "type": "string"
-                },
-                "warning": {
-                    "type": "string"
                 }
             }
         },
         "modem.ATForm": {
             "type": "object",
             "properties": {
-                "description": {
-                    "type": "string"
-                },
                 "kind": {
                     "$ref": "#/definitions/modem.ATFormKind"
                 },
@@ -2987,28 +2980,14 @@ const docTemplate = `{
         "modem.ATParam": {
             "type": "object",
             "properties": {
-                "description": {
-                    "type": "string"
-                },
                 "name": {
                     "type": "string"
                 },
                 "values": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/modem.ATParamValue"
+                        "type": "string"
                     }
-                }
-            }
-        },
-        "modem.ATParamValue": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
                 }
             }
         },

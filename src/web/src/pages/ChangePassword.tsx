@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import api from '@/lib/api';
 import AuthShell from '@/components/AuthShell';
@@ -38,8 +39,8 @@ export default function ChangePassword() {
       });
       completePasswordChange(res.data.token);
       navigate('/');
-    } catch {
-      setError(t('password.failed'));
+    } catch (err) {
+      setError(apiErrorMessage(err, t('password.failed')));
     } finally {
       setLoading(false);
     }

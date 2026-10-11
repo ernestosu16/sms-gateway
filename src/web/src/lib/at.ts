@@ -1,13 +1,15 @@
 /*
- * AT command helpers for the modem console. The catalog itself comes from
- * GET /modem/at/commands (internal/modem/atcatalog.go); this file only reads
- * it. parseAT mirrors parseATCommand in internal/modem/atcommand.go so the
+ * AT command helpers for the modem console. The catalog's structure comes from
+ * GET /modem/at/commands (internal/modem/atcatalog.go) and its wording from
+ * locales/atCatalog.*.ts; this file only reads them. parseAT mirrors parseATCommand in internal/modem/atcommand.go so the
  * console can preview a command's risk, but the server re-checks every
  * command and has the final say.
  */
 
-import { t } from '@/lib/i18n';
+import { getLocale, t, type Language } from '@/lib/i18n';
 import type { MessageKey } from '@/locales/en';
+import atCatalogEn, { type ATCatalogText } from '@/locales/atCatalog.en';
+import atCatalogEs from '@/locales/atCatalog.es';
 
 export type ATRisk = 'safe' | 'config' | 'dangerous' | 'unknown';
 export type ATFormKind = 'execute' | 'read' | 'test' | 'set';
@@ -15,26 +17,21 @@ export type ATFormKind = 'execute' | 'read' | 'test' | 'set';
 export interface ATForm {
   kind: ATFormKind;
   syntax: string;
-  description: string;
 }
 
 export interface ATParam {
   name: string;
-  description: string;
-  values?: { value: string; description: string }[];
+  values?: string[];
 }
 
 export interface ATCommandInfo {
   name: string;
-  title: string;
   category: string;
-  description: string;
   forms: ATForm[];
   params?: ATParam[];
   response?: string;
   example?: string;
   risk: Exclude<ATRisk, 'unknown'>;
-  warning?: string;
   reference?: string;
 }
 
@@ -42,6 +39,36 @@ export interface ATCatalog {
   commands: ATCommandInfo[];
   /** Names the modem reported through AT+CLAC, or null if it cannot say. */
   supported: string[] | null;
+}
+
+const catalogText: Record<Language, Record<string, ATCatalogText>> = {
+  en: atCatalogEn,
+  es: atCatalogEs,
+};
+
+const NO_TEXT: ATCatalogText = { title: '', description: '', forms: {} };
+
+/**
+ * Wording of a catalog command in the active language. A command the server
+ * knows but the WebUI does not yet document gets empty text, not an error.
+ */
+export function atText(name: string): ATCatalogText {
+  return catalogText[getLocale()][name] ?? NO_TEXT;
+}
+
+const CATEGORIES: Record<string, MessageKey> = {
+  General: 'at.category.general',
+  Device: 'at.category.device',
+  Network: 'at.category.network',
+  SIM: 'at.category.sim',
+  SMS: 'at.category.sms',
+  Calls: 'at.category.calls',
+};
+
+/** Catalog category in the active language. */
+export function atCategory(category: string): string {
+  const key = CATEGORIES[category];
+  return key ? t(key) : category;
 }
 
 /** Same rules as ValidateATCommand on the server. */
@@ -138,15 +165,16 @@ export interface Suggestion {
 
 /** Every form of every catalog command, plus modem-reported commands the catalog lacks. */
 export function buildSuggestions(catalog: ATCatalog): Suggestion[] {
-  const suggestions: Suggestion[] = catalog.commands.flatMap((info) =>
-    info.forms.map((form) => ({
+  const suggestions: Suggestion[] = catalog.commands.flatMap((info) => {
+    const text = atText(info.name);
+    return info.forms.map((form) => ({
       key: form.syntax,
       syntax: form.syntax,
       insert: insertTextFor(form.syntax),
-      description: `${info.title} — ${form.description}`,
+      description: [text.title, text.forms[form.kind]].filter(Boolean).join(' — '),
       info,
-    })),
-  );
+    }));
+  });
   const known = new Set(catalog.commands.map((c) => c.name));
   for (const name of catalog.supported ?? []) {
     if (known.has(name)) continue;

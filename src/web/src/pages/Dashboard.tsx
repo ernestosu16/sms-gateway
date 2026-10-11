@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import type { MessageKey } from '@/locales/en';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
@@ -150,10 +150,7 @@ export default function Dashboard() {
       }
     } catch (err) {
       // A 400 carries the reason, e.g. a number not in international format.
-      const reason = isAxiosError(err)
-        ? (err.response?.data as { error?: string } | undefined)?.error
-        : undefined;
-      setSendResult({ type: 'error', message: reason || t('chat.sendFailed') });
+      setSendResult({ type: 'error', message: apiErrorMessage(err, t('chat.sendFailed')) });
     } finally {
       setSending(false);
     }

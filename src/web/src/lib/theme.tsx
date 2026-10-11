@@ -41,7 +41,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem(THEME_STORAGE_KEY);
     return isThemeMode(saved) ? saved : 'system';
   });
-  const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>(() => getEffectiveTheme(themeMode));
+  const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>(() =>
+    getEffectiveTheme(themeMode),
+  );
 
   useEffect(() => {
     setEffectiveTheme(getEffectiveTheme(themeMode));

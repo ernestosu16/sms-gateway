@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentRef, type FormEvent
 import { Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import api from '@/lib/api';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import {
   chatPath,
@@ -42,14 +43,6 @@ type ContactRow = Contact & { id: string };
 
 function contactId(contact: Contact): string {
   return contact.phone_number;
-}
-
-/** Prefers the server's validation message over a generic fallback. */
-function errorMessage(err: unknown, fallback: string): string {
-  if (isAxiosError(err) && typeof err.response?.data?.error === 'string') {
-    return err.response.data.error;
-  }
-  return fallback;
 }
 
 /** Looks up the saved contact for exactly this number, if any. */
@@ -172,7 +165,7 @@ export default function Contacts() {
       refresh();
       notifyConversationsChanged();
     } catch (err) {
-      setActionError(errorMessage(err, t('contacts.saveFailed')));
+      setActionError(apiErrorMessage(err, t('contacts.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -197,7 +190,7 @@ export default function Contacts() {
         refresh();
         return;
       }
-      setActionError(errorMessage(err, t('contacts.deleteFailed')));
+      setActionError(apiErrorMessage(err, t('contacts.deleteFailed')));
     }
   };
 

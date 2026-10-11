@@ -269,10 +269,11 @@ type ATConfirmationRequired struct {
 	Error                string `json:"error"`
 	RequiresConfirmation bool   `json:"requires_confirmation"`
 	// Risk is "dangerous" or "unknown".
-	Risk    string `json:"risk"`
-	Warning string `json:"warning,omitempty"`
-	// Title names the recognised command, when there is one.
-	Title string `json:"title,omitempty"`
+	Risk string `json:"risk"`
+	// Name is the catalog name of the command ("+CFUN", "" for bare AT), or
+	// absent when the catalog does not know it. Clients look up the warning
+	// to show by this name.
+	Name *string `json:"name,omitempty"`
 }
 
 // ATCommandResponse is the response body for a raw AT command.

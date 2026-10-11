@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/cn';
 import { listCountries } from '@/lib/phone';
@@ -108,8 +108,7 @@ export default function SendPolicy() {
       if (res.data.mode === 'selected') setSelected(res.data.countries);
       setSuccess(t('sendPolicy.saved'));
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      setError(typeof message === 'string' ? message : t('sendPolicy.saveFailed'));
+      setError(apiErrorMessage(err, t('sendPolicy.saveFailed')));
     } finally {
       setSaving(false);
     }

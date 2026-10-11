@@ -82,9 +82,6 @@ func TestClassifyATCommand(t *testing.T) {
 			if tt.wantKind != "" && got.Kind != tt.wantKind {
 				t.Errorf("ClassifyATCommand(%q).Kind = %s, want %s", tt.cmd, got.Kind, tt.wantKind)
 			}
-			if got.Risk.RequiresConfirmation() && got.Warning() == "" {
-				t.Errorf("ClassifyATCommand(%q) needs confirmation but has no warning", tt.cmd)
-			}
 		})
 	}
 }
@@ -99,15 +96,11 @@ func TestATCatalogIsConsistent(t *testing.T) {
 		if c.Name != strings.ToUpper(c.Name) {
 			t.Errorf("%q: name must be upper case", c.Name)
 		}
-		if c.Title == "" || c.Description == "" || c.Category == "" || len(c.Forms) == 0 {
-			t.Errorf("%q: title, description, category and forms are required", c.Name)
+		if c.Category == "" || len(c.Forms) == 0 {
+			t.Errorf("%q: category and forms are required", c.Name)
 		}
 		switch c.Risk {
-		case RiskSafe, RiskConfig:
-		case RiskDangerous:
-			if c.Warning == "" {
-				t.Errorf("%q: dangerous commands need a warning", c.Name)
-			}
+		case RiskSafe, RiskConfig, RiskDangerous:
 		default:
 			t.Errorf("%q: invalid risk %q", c.Name, c.Risk)
 		}

@@ -11,8 +11,10 @@ import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatTimeWithSeconds } from '@/lib/format';
+import { apiErrorMessage } from '@/lib/apiError';
 import { useI18n } from '@/lib/i18n';
 import {
+  atText,
   buildSuggestions,
   decodeATResponse,
   matchSuggestions,
@@ -50,8 +52,8 @@ interface ConsoleEntry {
 interface ConfirmationRequired {
   requires_confirmation: true;
   risk: 'dangerous' | 'unknown';
-  warning?: string;
-  title?: string;
+  /** Catalog name of the command, absent when the catalog does not know it. */
+  name?: string;
 }
 
 /** Read-only commands worth a single click. */
@@ -256,15 +258,22 @@ export default function ATConsole() {
         const data = isAxiosError(err) ? err.response?.data : undefined;
         if (isAxiosError(err) && err.response?.status === 409 && data?.requires_confirmation) {
           const required = data as ConfirmationRequired;
+          const text = required.name !== undefined ? atText(required.name) : undefined;
+          const warning =
+            required.risk === 'dangerous'
+              ? text?.warning
+              : text
+                ? t('at.unrecognised')
+                : t('at.unknownCommand');
           const ok = await confirm({
             title:
               required.risk === 'unknown'
                 ? t('at.unknownTitle')
-                : t('at.runTitle', { command: required.title ?? cmd }),
+                : t('at.runTitle', { command: text?.title || cmd }),
             description: (
               <>
                 <code className="font-mono text-xs break-all text-fg">{cmd}</code>
-                <p className="mt-2">{required.warning}</p>
+                {warning && <p className="mt-2">{warning}</p>}
               </>
             ),
             confirmLabel: t('at.sendAnyway'),
@@ -276,12 +285,11 @@ export default function ATConsole() {
           }
           return send(true);
         }
-        const message =
-          typeof data?.error === 'string'
-            ? data.error
-            : err instanceof Error
-              ? err.message
-              : t('at.commandFailed');
+        // A modem failure has no code; its text is the modem's own reply.
+        const message = apiErrorMessage(
+          err,
+          typeof data?.error === 'string' ? data.error : t('at.commandFailed'),
+        );
         updateEntry(id, { status: 'error', response: message });
       }
     };
