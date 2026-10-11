@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { useBuildInfo } from '@/lib/buildInfo';
+import { useI18n } from '@/lib/i18n';
 import LanguageControl from '@/components/LanguageControl';
 import ThemeModeControl from '@/components/ThemeModeControl';
 import { Card, MessageIcon } from '@/components/ui';
@@ -11,6 +13,8 @@ interface AuthShellProps {
 
 /** Centered card layout for the screens shown before the main app. */
 export default function AuthShell({ title, description, children }: AuthShellProps) {
+  const { t } = useI18n();
+  const build = useBuildInfo();
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center bg-app px-4 py-16">
       <div className="absolute top-4 right-4 flex flex-wrap justify-end gap-2">
@@ -31,6 +35,11 @@ export default function AuthShell({ title, description, children }: AuthShellPro
           {description && <div className="mt-1 text-sm text-fg-muted">{description}</div>}
           <div className="mt-6">{children}</div>
         </Card>
+        {build && (
+          <p className="mt-4 truncate text-center text-xs text-fg-muted" title={build}>
+            {t('preferences.version')}: <span className="font-mono">{build}</span>
+          </p>
+        )}
       </div>
     </div>
   );

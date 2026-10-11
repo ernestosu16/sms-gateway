@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/mattboston/sms-gateway/internal/buildinfo"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/modem"
 )
@@ -12,6 +13,8 @@ type HealthResponse struct {
 	Status   string `json:"status"`
 	Database string `json:"database"`
 	Modem    string `json:"modem"`
+	Version  string `json:"version"`
+	Commit   string `json:"commit,omitempty"`
 }
 
 // HealthHandler handles the health check endpoint.
@@ -28,7 +31,7 @@ func NewHealthHandler(repo *database.Repository, m modem.Modem) *HealthHandler {
 // HandleHealth checks database connectivity and modem status, returning the overall health.
 //
 // @Summary      Health check
-// @Description  Checks database connectivity and modem status, returning the overall system health.
+// @Description  Checks database connectivity and modem status, returning the overall system health and the running build.
 // @Tags         Health
 // @Produce      json
 // @Success      200  {object}  HealthResponse
@@ -39,6 +42,8 @@ func (h *HealthHandler) HandleHealth(w http.ResponseWriter, _ *http.Request) {
 		Status:   "ok",
 		Database: "ok",
 		Modem:    "ok",
+		Version:  buildinfo.Version,
+		Commit:   buildinfo.Commit,
 	}
 	statusCode := http.StatusOK
 

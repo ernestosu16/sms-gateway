@@ -590,7 +590,7 @@ const docTemplate = `{
         },
         "/api/v1/health": {
             "get": {
-                "description": "Checks database connectivity and modem status, returning the overall system health.",
+                "description": "Checks database connectivity and modem status, returning the overall system health and the running build.",
                 "produces": [
                     "application/json"
                 ],
@@ -2291,6 +2291,9 @@ const docTemplate = `{
         "api.HealthResponse": {
             "type": "object",
             "properties": {
+                "commit": {
+                    "type": "string"
+                },
                 "database": {
                     "type": "string"
                 },
@@ -2298,6 +2301,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                },
+                "version": {
                     "type": "string"
                 }
             }

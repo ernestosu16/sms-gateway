@@ -39,6 +39,7 @@ const es: Record<MessageKey, string> = {
   'theme.label': 'Modo de tema',
   'preferences.title': 'Preferencias',
   'preferences.theme': 'Tema',
+  'preferences.version': 'Versión',
   'theme.light': 'Claro',
   'theme.dark': 'Oscuro',
   'theme.system': 'Sistema',

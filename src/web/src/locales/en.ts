@@ -40,6 +40,7 @@ const en = {
   'theme.label': 'Theme mode',
   'preferences.title': 'Preferences',
   'preferences.theme': 'Theme',
+  'preferences.version': 'Version',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
   'theme.system': 'System',

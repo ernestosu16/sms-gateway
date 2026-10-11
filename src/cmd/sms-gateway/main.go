@@ -35,6 +35,7 @@ import (
 	smsgateway "github.com/mattboston/sms-gateway"
 	"github.com/mattboston/sms-gateway/internal/api"
 	"github.com/mattboston/sms-gateway/internal/auth"
+	"github.com/mattboston/sms-gateway/internal/buildinfo"
 	"github.com/mattboston/sms-gateway/internal/config"
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
@@ -44,13 +45,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-var version = "dev"
-
 func main() {
 	rootCmd := &cobra.Command{
 		Use:     "sms-gateway",
 		Short:   "SMS Gateway - Send and receive SMS via a USB GSM modem",
-		Version: version,
+		Version: buildinfo.String(),
 	}
 
 	// Persistent flags bound to viper.

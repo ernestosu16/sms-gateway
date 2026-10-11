@@ -16,11 +16,15 @@ definitions:
     type: object
   api.HealthResponse:
     properties:
+      commit:
+        type: string
       database:
         type: string
       modem:
         type: string
       status:
+        type: string
+      version:
         type: string
     type: object
   models.APIKey:
@@ -898,7 +902,7 @@ paths:
   /api/v1/health:
     get:
       description: Checks database connectivity and modem status, returning the overall
-        system health.
+        system health and the running build.
       produces:
       - application/json
       responses:

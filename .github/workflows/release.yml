@@ -63,7 +63,7 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           cd src
-          go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
+          go build -ldflags="-s -w -X github.com/mattboston/sms-gateway/internal/buildinfo.Version=${{ github.ref_name }}" \
             -o ../bin/sms-gateway-${{ matrix.suffix }} \
             ./cmd/sms-gateway
 
@@ -110,6 +110,7 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 

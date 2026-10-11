@@ -22,8 +22,11 @@ COPY --from=web-build /app/src/web/dist ./web/dist
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags="-s -w -X main.version=${VERSION}" \
+ARG COMMIT=
+# .git is not in the build context, so the commit must come in as a build arg.
+RUN PKG=github.com/mattboston/sms-gateway/internal/buildinfo && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -ldflags="-s -w -X $PKG.Version=${VERSION} -X $PKG.Commit=${COMMIT}" \
     -o /out/sms-gateway ./cmd/sms-gateway
 
 FROM debian:bookworm-slim AS runtime

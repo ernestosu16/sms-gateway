@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ComponentRef } from 'react';
+import { useBuildInfo } from '@/lib/buildInfo';
 import { cn } from '@/lib/cn';
 import { useI18n } from '@/lib/i18n';
 import LanguageControl from '@/components/LanguageControl';
@@ -26,6 +27,7 @@ export default function PreferencesMenu({ className, panelClassName }: Preferenc
   const rootRef = useRef<ComponentRef<'div'>>(null);
   const triggerRef = useRef<ComponentRef<'button'>>(null);
   const panelId = useId();
+  const build = useBuildInfo(open);
 
   // Dismiss like a menu: a press outside or Escape closes it. Picking an
   // option keeps it open so the change can be seen and adjusted.
@@ -82,6 +84,11 @@ export default function PreferencesMenu({ className, panelClassName }: Preferenc
             <p className="text-xs font-medium text-fg-muted">{t('preferences.theme')}</p>
             <ThemeModeControl withLabels className="flex w-full" />
           </div>
+          {build && (
+            <p className="truncate border-t border-border pt-2 text-xs text-fg-muted" title={build}>
+              {t('preferences.version')}: <span className="font-mono">{build}</span>
+            </p>
+          )}
         </div>
       )}
     </div>
