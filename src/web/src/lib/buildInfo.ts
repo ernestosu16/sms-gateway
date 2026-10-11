@@ -6,6 +6,12 @@ interface HealthBuild {
   commit?: string;
 }
 
+/** "version · commit", dropping the commit when the version already names it (git describe). */
+function formatBuild({ version, commit }: HealthBuild): string {
+  if (!commit || version.includes(commit.replace(/-dirty$/, ''))) return version;
+  return `${version} · ${commit}`;
+}
+
 let cached: Promise<string | null> | null = null;
 
 /** Loads the running build once per page load from the public health check. */
@@ -13,9 +19,7 @@ function loadBuild(): Promise<string | null> {
   // A degraded gateway answers 503 but still reports its build.
   cached ??= api
     .get<HealthBuild>('/health', { validateStatus: () => true })
-    .then(({ data }) =>
-      data?.version ? (data.commit ? `${data.version} · ${data.commit}` : data.version) : null,
-    )
+    .then(({ data }) => (data?.version ? formatBuild(data) : null))
     .catch(() => {
       cached = null;
       return null;

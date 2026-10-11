@@ -1,6 +1,11 @@
 # Live-reload tool for the Go backend, pinned and fetched on first use by `go run`
 air := "go run github.com/air-verse/air@v1.67.4"
 
+# Version stamped into local builds (e.g. 0.1.5-79-g19bb7a3); releases pass the exact tag instead.
+version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+# The -X=name=value form has no spaces, so it also works inside GOFLAGS.
+ldflags := "-X=github.com/mattboston/sms-gateway/internal/buildinfo.Version=" + version
+
 # Show available commands
 default:
     @just --list
@@ -11,7 +16,7 @@ dev: dev-api dev-web
 
 # Run just the Go backend in dev mode
 dev-api:
-    cd src && go run ./cmd/sms-gateway serve --dev-mode --db-dsn ./sms-gateway.db
+    cd src && go run -ldflags "{{ ldflags }}" ./cmd/sms-gateway serve --dev-mode --db-dsn ./sms-gateway.db
 
 # Run Go backend with live reload (air) and Vite frontend
 [parallel]
@@ -19,7 +24,7 @@ dev-watch: dev-api-watch dev-web
 
 # Run just the Go backend with live reload (air)
 dev-api-watch:
-    cd src && {{ air }}
+    cd src && GOFLAGS="-ldflags={{ ldflags }}" {{ air }}
 
 # Run just the Vite dev server
 dev-web:
@@ -30,15 +35,15 @@ build: build-web build-api
 
 # Build just the Go binary (assumes frontend already built)
 build-api:
-    cd src && CGO_ENABLED=0 go build -o ../bin/sms-gateway ./cmd/sms-gateway
+    cd src && CGO_ENABLED=0 go build -ldflags "{{ ldflags }}" -o ../bin/sms-gateway ./cmd/sms-gateway
 
 # Build for Linux x86_64 (assumes frontend already built)
 build-linux:
-    cd src && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../bin/sms-gateway-linux-amd64 ./cmd/sms-gateway
+    cd src && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "{{ ldflags }}" -o ../bin/sms-gateway-linux-amd64 ./cmd/sms-gateway
 
 # Build for Linux ARM (Raspberry Pi) (assumes frontend already built)
 build-linux-arm:
-    cd src && CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o ../bin/sms-gateway-linux-arm7 ./cmd/sms-gateway
+    cd src && CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "{{ ldflags }}" -o ../bin/sms-gateway-linux-arm7 ./cmd/sms-gateway
 
 # Build frontend + all Linux binaries
 build-all: build-web build-api build-linux build-linux-arm

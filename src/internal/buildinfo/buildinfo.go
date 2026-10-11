@@ -2,7 +2,10 @@
 // whether a deployment picked up the latest code.
 package buildinfo
 
-import "runtime/debug"
+import (
+	"runtime/debug"
+	"strings"
+)
 
 // Version is the release tag, set at build time with
 // -ldflags "-X github.com/mattboston/sms-gateway/internal/buildinfo.Version=...".
@@ -56,9 +59,9 @@ func vcsRevision() string {
 }
 
 // String renders the build as "version (commit)", or just the version when the
-// commit is unknown.
+// commit is unknown or the version already names it (git describe output).
 func String() string {
-	if Commit == "" {
+	if Commit == "" || strings.Contains(Version, strings.TrimSuffix(Commit, "-dirty")) {
 		return Version
 	}
 	return Version + " (" + Commit + ")"
