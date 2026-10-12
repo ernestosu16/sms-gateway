@@ -203,6 +203,6 @@ func writeInternalError(w http.ResponseWriter, message string) {
 // errNameRequired and nameTooLong validate the name of any named resource.
 var errNameRequired = apperr.New("name_required", "name is required", nil)
 
-func nameTooLong(max int) *apperr.Error {
-	return apperr.New("name_too_long", "name must be at most {max} characters", apperr.Params{"max": max})
+func nameTooLong(maxLen int) *apperr.Error {
+	return apperr.New("name_too_long", "name must be at most {max} characters", apperr.Params{"max": maxLen})
 }

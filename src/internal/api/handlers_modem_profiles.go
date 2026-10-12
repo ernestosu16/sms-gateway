@@ -50,7 +50,7 @@ func NewModemProfileHandler(repo *database.Repository) *ModemProfileHandler {
 // @Failure      500  {object}  models.ErrorResponse
 // @Security     BearerAuth
 // @Router       /api/v1/modem/profiles [get]
-func (h *ModemProfileHandler) HandleListModemProfiles(w http.ResponseWriter, r *http.Request) {
+func (h *ModemProfileHandler) HandleListModemProfiles(w http.ResponseWriter, _ *http.Request) {
 	profiles, err := h.repo.ListModemProfiles()
 	if err != nil {
 		writeInternalError(w, "failed to list modem profiles")

@@ -10,7 +10,7 @@ RUN npm run build
 # Must be >= the go directive in src/go.mod. The golang images set
 # GOTOOLCHAIN=local, so a base image older than go.mod fails outright rather
 # than downloading a newer toolchain.
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS go-build
 WORKDIR /app/src
 
 COPY src/go.mod src/go.sum ./
