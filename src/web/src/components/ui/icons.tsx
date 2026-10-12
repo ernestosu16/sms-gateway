@@ -92,6 +92,8 @@ export const ClockIcon = icon(
   </>,
 );
 export const ArrowDownIcon = icon(<path d="M12 5v14M19 12l-7 7-7-7" />);
+export const ArrowDownLeftIcon = icon(<path d="M17 7 7 17M17 17H7V7" />);
+export const ArrowUpRightIcon = icon(<path d="M7 17 17 7M7 7h10v10" />);
 export const PlusIcon = icon(<path d="M12 5v14M5 12h14" />);
 export const CopyIcon = icon(
   <>

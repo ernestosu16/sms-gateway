@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { useI18n } from '@/lib/i18n';
 import type { MessageKey } from '@/locales/en';
+import { ArrowDownLeftIcon, ArrowUpRightIcon } from './icons';
 
 const tones = {
   neutral: 'bg-neutral-soft text-neutral-soft-fg',
@@ -60,8 +61,14 @@ export function MessageStatusBadge({ status }: { status: string }) {
 export function DirectionBadge({ direction }: { direction: string }) {
   const { t } = useI18n();
   return direction === 'inbound' ? (
-    <Badge tone="primary">{t('direction.in')}</Badge>
+    <Badge tone="primary">
+      <ArrowDownLeftIcon className="h-3 w-3" />
+      <span className="sr-only">{t('direction.in')}</span>
+    </Badge>
   ) : (
-    <Badge tone="neutral">{t('direction.out')}</Badge>
+    <Badge tone="success">
+      <ArrowUpRightIcon className="h-3 w-3" />
+      <span className="sr-only">{t('direction.out')}</span>
+    </Badge>
   );
 }
