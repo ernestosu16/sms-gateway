@@ -143,11 +143,8 @@ func serveCmd() *cobra.Command {
 				if cfg.DevicePath == "" {
 					return fmt.Errorf("device-path is required when not in dev mode")
 				}
-				serialModem, err := modem.NewSerialModem(cfg.DevicePath, cfg.BaudRate)
-				if err != nil {
-					return fmt.Errorf("opening modem: %w", err)
-				}
-				m = serialModem
+				// Starts even when the modem is unplugged; it connects once the device appears.
+				m = modem.NewReconnectingSerialModem(cfg.DevicePath, cfg.BaudRate)
 			}
 			defer m.Close()
 
