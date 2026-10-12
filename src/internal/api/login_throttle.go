@@ -18,10 +18,9 @@ const (
 
 // loginThrottle limits failed logins per username.
 //
-// It is keyed on the username, not the client IP: the RealIP middleware takes
-// the IP from client-supplied headers, so a per-IP limit could be dodged by
-// rotating X-Forwarded-For, and behind a proxy every client would share one
-// bucket. The trade-off is that someone hammering a username also blocks its
+// It is keyed on the username, not the client IP: behind a proxy every client
+// shares one RemoteAddr, and trusting X-Forwarded-For instead would let a
+// client dodge a per-IP limit by rotating the header. The trade-off is that someone hammering a username also blocks its
 // owner until the window ends. Unknown usernames are tracked the same way so
 // the response does not reveal which ones exist.
 type loginThrottle struct {
