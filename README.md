@@ -121,6 +121,12 @@ The original author uses and recommends the [SIM7600G-H 4G LTE USB Dongle](https
 
 ![SIM7600G-H 4G Dongle](docs/images/sim7600g-h-4g-dongle-1.jpg)
 
+### Tested hardware
+
+This fork was developed and tested with the [Waveshare NB-IoT/Cat-M(eMTC)/GNSS HAT for Raspberry Pi, based on the SIM7080G](https://a.co/d/0fhnNrx3), bought on Amazon. It was connected to the computer over **USB** (the board's micro-USB port), not mounted on the Raspberry Pi GPIO header. The SIM7080G is an LTE-M (Cat-M) and NB-IoT module, so the SIM's carrier must support LTE-M; the built-in **Tello USA** profile in **Modem → Modem Setup** switches the module to LTE-M and checks registration. For pinout and drivers, see the [Waveshare SIM7080G HAT wiki](https://www.waveshare.com/wiki/SIM7080G_Cat-M/NB-IoT_HAT).
+
+![SIM7080G NB-IoT/Cat-M HAT with LTE and GNSS antennas](docs/images/sim7080g-hat.webp)
+
 ### SIM Card
 
 Any SIM card with an active SMS plan will work. The original author uses [Tello](https://tello.com/account/register?_referral=P30KX3Z2), which offers affordable pay-as-you-go plans on the T-Mobile network, for about $8/month with unlimited SMS.
