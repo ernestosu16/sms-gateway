@@ -54,6 +54,7 @@ const en = {
   'nav.apiKeys': 'API Keys',
   'nav.webhooks': 'Webhooks',
   'nav.users': 'Users',
+  'nav.modem': 'Modem',
   'nav.modemTest': 'Modem Test',
   'nav.modemSetup': 'Modem Setup',
   'nav.sendPolicy': 'Send Countries',

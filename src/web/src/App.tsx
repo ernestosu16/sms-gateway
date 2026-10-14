@@ -10,6 +10,7 @@ import Webhooks from '@/pages/Webhooks';
 import Users from '@/pages/Users';
 import ModemTest from '@/pages/ModemTest';
 import ModemSetup from '@/pages/ModemSetup';
+import Modem from '@/pages/Modem';
 import { lazy, type ReactNode } from 'react';
 
 // The phone-number metadata (libphonenumber-js) is only needed by these
@@ -57,9 +58,14 @@ export default function App() {
         <Route path="/apikeys" element={<APIKeys />} />
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/users" element={<Users />} />
-        <Route path="/modem" element={<ModemTest />} />
-        <Route path="/modem-setup" element={<ModemSetup />} />
-        <Route path="/send-policy" element={<SendPolicy />} />
+        <Route path="/modem" element={<Modem />}>
+          <Route index element={<ModemTest />} />
+          <Route path="setup" element={<ModemSetup />} />
+          <Route path="send-policy" element={<SendPolicy />} />
+        </Route>
+        {/* Former standalone pages, now tabs under /modem. */}
+        <Route path="/modem-setup" element={<Navigate to="/modem/setup" replace />} />
+        <Route path="/send-policy" element={<Navigate to="/modem/send-policy" replace />} />
       </Route>
     </Routes>
   );

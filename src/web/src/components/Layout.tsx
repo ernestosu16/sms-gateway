@@ -12,7 +12,6 @@ import PreferencesMenu from '@/components/PreferencesMenu';
 import {
   ContactIcon,
   DashboardIcon,
-  GlobeIcon,
   KeyIcon,
   LoadingState,
   LogoutIcon,
@@ -21,7 +20,6 @@ import {
   ResizeHandle,
   SidebarIcon,
   SignalIcon,
-  SlidersIcon,
   UsersIcon,
   WebhookIcon,
   XIcon,
@@ -45,9 +43,7 @@ const navSections: {
       { to: '/apikeys', label: 'nav.apiKeys', Icon: KeyIcon },
       { to: '/webhooks', label: 'nav.webhooks', Icon: WebhookIcon },
       { to: '/users', label: 'nav.users', Icon: UsersIcon },
-      { to: '/send-policy', label: 'nav.sendPolicy', Icon: GlobeIcon },
-      { to: '/modem', label: 'nav.modemTest', Icon: SignalIcon },
-      { to: '/modem-setup', label: 'nav.modemSetup', Icon: SlidersIcon },
+      { to: '/modem', label: 'nav.modem', Icon: SignalIcon },
     ],
   },
 ];
@@ -55,6 +51,7 @@ const navSections: {
 /** Section name for the compact mobile header. */
 function sectionTitle(pathname: string): MessageKey {
   if (pathname.startsWith('/chats') || pathname.startsWith('/messages/')) return 'nav.messages';
+  if (pathname.startsWith('/modem/')) return 'nav.modem';
   for (const section of navSections) {
     const item = section.items.find((i) => i.to === pathname);
     if (item) return item.label;

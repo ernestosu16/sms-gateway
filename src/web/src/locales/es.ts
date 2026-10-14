@@ -53,6 +53,7 @@ const es: Record<MessageKey, string> = {
   'nav.apiKeys': 'Claves API',
   'nav.webhooks': 'Webhooks',
   'nav.users': 'Usuarios',
+  'nav.modem': 'Módem',
   'nav.modemTest': 'Prueba de módem',
   'nav.modemSetup': 'Configuración del módem',
   'nav.sendPolicy': 'Países de envío',
