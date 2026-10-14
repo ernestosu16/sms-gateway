@@ -95,7 +95,8 @@ lanzar un procedimiento.
 - Gestión de claves API para acceso programático (desactivar o eliminar claves)
 - Webhooks firmados con notificaciones en tiempo real de mensajes recibidos, enviados y fallidos
 - Gestión de usuarios con rol de administrador; los administradores pueden eliminar usuarios no administradores (las cuentas de administrador están protegidas)
-- Página **Prueba de módem** con estado del módem, intensidad de señal y una **consola AT**: autocompletado, referencia integrada de comandos AT (V.250, 3GPP TS 27.007/27.005), interpretación de respuestas en lenguaje sencillo, comandos rápidos, registro persistente estilo terminal y confirmación para comandos peligrosos
+- Página **Módem** con tres pestañas: **Prueba de módem**, **Configuración del módem** (perfiles de proveedor cuyos comandos AT preparan una SIM) y **Países de envío** (a qué países se pueden enviar SMS)
+- Pestaña **Prueba de módem** con estado del módem, intensidad de señal y una **consola AT**: autocompletado, referencia integrada de comandos AT (V.250, 3GPP TS 27.007/27.005), interpretación de respuestas en lenguaje sencillo, comandos rápidos, registro persistente estilo terminal y confirmación para comandos peligrosos
 - Limitación de intentos de inicio de sesión y cambio obligatorio de la contraseña generada para `admin`
 
 **Interfaz web**
@@ -171,9 +172,21 @@ Campo de teléfono internacional con detección de país y validación del núme
 
 ![Usuarios](docs/images/screenshots/es/users.png)
 
-### Prueba de módem y consola AT
+### Módem
+
+El estado del módem, la configuración del proveedor y los países de envío están en una sola página **Módem**, como pestañas.
+
+Pestaña **Prueba de módem**: estado, señal, datos de la SIM y del módem, y la consola AT.
 
 ![Prueba de módem](docs/images/screenshots/es/modem.png)
+
+Pestaña **Configuración del módem**: perfiles de proveedor con los comandos AT que preparan una SIM.
+
+![Configuración del módem](docs/images/screenshots/es/modem-setup.png)
+
+Pestaña **Países de envío**: elige a qué países se pueden enviar SMS.
+
+![Países de envío](docs/images/screenshots/es/send-policy.png)
 
 ### Preferencias
 
@@ -189,9 +202,9 @@ Idioma (Auto, inglés, español) y tema (Claro, Oscuro, Sistema).
 
 ### Móvil
 
-| Panel | Conversaciones | Conversación |
-|-------|----------------|--------------|
-| ![Panel en móvil](docs/images/screenshots/es/mobile-dashboard.png) | ![Conversaciones en móvil](docs/images/screenshots/es/mobile-chats.png) | ![Conversación en móvil](docs/images/screenshots/es/mobile-thread.png) |
+| Panel | Conversaciones | Conversación | Módem |
+|-------|----------------|--------------|-------|
+| ![Panel en móvil](docs/images/screenshots/es/mobile-dashboard.png) | ![Conversaciones en móvil](docs/images/screenshots/es/mobile-chats.png) | ![Conversación en móvil](docs/images/screenshots/es/mobile-thread.png) | ![Configuración del módem en móvil](docs/images/screenshots/es/mobile-modem.png) |
 
 ### Inicio de sesión
 
@@ -336,7 +349,7 @@ Abre la interfaz en `http://localhost:5174` e inicia sesión con una cuenta de a
 | **Claves API** | Crea claves para integraciones externas (por ejemplo, OpenClaw) y luego desactívalas o elimínalas. La clave solo se muestra una vez. |
 | **Webhooks** | Solo administradores. Crea, edita, pausa, reanuda y elimina webhooks. Consulta [Webhooks](#webhooks). |
 | **Usuarios** | Solo administradores. Crea usuarios, concede permisos de administrador y elimina usuarios no administradores. |
-| **Prueba de módem** | Solo administradores. Estado del módem, señal y consola AT. |
+| **Módem** | Solo administradores, salvo las tarjetas de estado. Pestañas **Prueba de módem** (estado, señal y consola AT), **Configuración del módem** (perfiles de proveedor) y **Países de envío** (países de destino permitidos). |
 
 Consejos:
 
@@ -344,11 +357,11 @@ Consejos:
 - El número de no leídos aparece en la entrada **Mensajes** del menú, en el botón de menú en móvil y en el título de la pestaña del navegador.
 - Abre **Preferencias** (el icono de controles deslizantes junto a tu usuario, al pie de la barra lateral) para cambiar idioma y tema. La página de inicio de sesión tiene los mismos controles en la esquina superior derecha. La elección se recuerda en el navegador.
 - En escritorio puedes plegar la barra lateral a una columna de iconos con el botón de su cabecera, o arrastrar su borde derecho para cambiar el ancho (doble clic en el borde para restablecerlo). En móvil la barra lateral se convierte en un panel deslizable.
-- Los enlaces antiguos `/inbox`, `/outbox` y `/send` redirigen a la vista Mensajes.
+- Los enlaces antiguos `/inbox`, `/outbox` y `/send` redirigen a la vista Mensajes; los antiguos `/modem-setup` y `/send-policy` abren la pestaña correspondiente de **Módem**.
 
 ### Consola AT
 
-La página **Prueba de módem** incluye una consola para comandos AT:
+La pestaña **Prueba de módem** de la página **Módem** incluye una consola para comandos AT:
 
 - Escribe un comando o búscalo por nombre (por ejemplo `csq` o `signal`); las sugerencias vienen de una referencia integrada y de los comandos que el módem informa con `AT+CLAC`.
 - Una ficha de referencia bajo el campo muestra la sintaxis, los parámetros y el formato de respuesta del comando seleccionado.
@@ -645,7 +658,7 @@ src/
     src/components/   # Layout, UI compartida, chat y consola AT
     src/lib/          # Cliente API, autenticación, i18n, tema y hooks
     src/locales/      # Diccionarios en inglés y español
-    src/pages/        # Panel, Mensajes, Contactos, Claves API, Webhooks, Usuarios, Prueba de módem
+    src/pages/        # Panel, Mensajes, Contactos, Claves API, Webhooks, Usuarios, Módem (pestañas)
   migrations/         # Migraciones SQL de Goose
   docs/               # Documentación de Swagger generada
 deploy/               # Unidad de systemd y configuración de ejemplo

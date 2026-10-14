@@ -90,7 +90,8 @@ off a runbook.
 - API key management for programmatic access (deactivate or delete keys)
 - Signed webhooks for real-time notifications on received, sent and failed messages
 - User management with admin roles; admins can delete non-admin users (admin accounts are protected)
-- **Modem Test** page with modem status, signal strength and an **AT console**: autocomplete, a built-in AT command reference (V.250, 3GPP TS 27.007/27.005), plain-language decoding of responses, quick commands, a persistent terminal-style log, and confirmation for risky commands
+- **Modem** page with three tabs: **Modem Test**, **Modem Setup** (carrier profiles whose AT commands prepare a SIM) and **Send Countries** (which countries outbound SMS may go to)
+- **Modem Test** tab with modem status, signal strength and an **AT console**: autocomplete, a built-in AT command reference (V.250, 3GPP TS 27.007/27.005), plain-language decoding of responses, quick commands, a persistent terminal-style log, and confirmation for risky commands
 - Login throttling and a forced password change for the generated admin account
 
 **Web UI**
@@ -166,9 +167,21 @@ International phone input with country detection and number validation.
 
 ![Users](docs/images/screenshots/en/users.png)
 
-### Modem Test and AT console
+### Modem
+
+Modem status, carrier setup and send countries live under one **Modem** page, as tabs.
+
+**Modem Test** tab: status, signal, SIM and modem details, and the AT console.
 
 ![Modem Test](docs/images/screenshots/en/modem.png)
+
+**Modem Setup** tab: carrier profiles with the AT commands that prepare a SIM.
+
+![Modem Setup](docs/images/screenshots/en/modem-setup.png)
+
+**Send Countries** tab: choose which countries outbound SMS can be sent to.
+
+![Send Countries](docs/images/screenshots/en/send-policy.png)
 
 ### Preferences
 
@@ -184,9 +197,9 @@ Language (Auto, English, Spanish) and theme (Light, Dark, System).
 
 ### Mobile
 
-| Dashboard | Conversations | Thread |
-|-----------|---------------|--------|
-| ![Mobile dashboard](docs/images/screenshots/en/mobile-dashboard.png) | ![Mobile conversations](docs/images/screenshots/en/mobile-chats.png) | ![Mobile thread](docs/images/screenshots/en/mobile-thread.png) |
+| Dashboard | Conversations | Thread | Modem |
+|-----------|---------------|--------|-------|
+| ![Mobile dashboard](docs/images/screenshots/en/mobile-dashboard.png) | ![Mobile conversations](docs/images/screenshots/en/mobile-chats.png) | ![Mobile thread](docs/images/screenshots/en/mobile-thread.png) | ![Mobile modem setup](docs/images/screenshots/en/mobile-modem.png) |
 
 ### Sign in
 
@@ -330,7 +343,7 @@ Open the WebUI at `http://localhost:5174` and sign in with an admin account. The
 | **API Keys** | Create keys for external integrations (for example, OpenClaw), then deactivate or delete them. The key is shown only once. |
 | **Webhooks** | Admin only. Create, edit, pause, resume and delete webhooks. See [Webhooks](#webhooks). |
 | **Users** | Admin only. Create users, grant admin rights and delete non-admin users. |
-| **Modem Test** | Admin only. Modem status, signal and the AT console. |
+| **Modem** | Admin only, except the status cards. Tabs for **Modem Test** (status, signal and the AT console), **Modem Setup** (carrier profiles) and **Send Countries** (allowed destination countries). |
 
 Tips:
 
@@ -338,11 +351,11 @@ Tips:
 - The unread count appears on the **Messages** nav item, on the mobile menu button and in the browser tab title.
 - Open **Preferences** (the sliders icon next to your user in the sidebar footer) to switch language and theme. The sign-in page has the same controls in its top-right corner. Your choice is remembered in the browser.
 - On desktop, collapse the sidebar to an icon rail with the button in its header, or drag its right edge to resize it (double-click the edge to reset). On phones the sidebar becomes a drawer.
-- Old `/inbox`, `/outbox` and `/send` links redirect to the Messages view.
+- Old `/inbox`, `/outbox` and `/send` links redirect to the Messages view; old `/modem-setup` and `/send-policy` links open the matching **Modem** tab.
 
 ### AT console
 
-The **Modem Test** page includes a console for raw AT commands:
+The **Modem Test** tab of the **Modem** page includes a console for raw AT commands:
 
 - Type a command or search by name (e.g. `csq` or `signal`); suggestions come from a built-in command reference plus the commands your modem reports through `AT+CLAC`.
 - A reference card below the input shows the syntax, parameters and response format of the selected command.
@@ -635,7 +648,7 @@ src/
     src/components/   # Layout, shared UI, chat and AT console components
     src/lib/          # API client, auth, i18n, theme and hooks
     src/locales/      # English and Spanish dictionaries
-    src/pages/        # Dashboard, Chats, Contacts, API Keys, Webhooks, Users, Modem Test
+    src/pages/        # Dashboard, Chats, Contacts, API Keys, Webhooks, Users, Modem (tabs)
   migrations/         # Goose SQL migrations
   docs/               # Generated Swagger docs
 deploy/               # systemd unit and example config
