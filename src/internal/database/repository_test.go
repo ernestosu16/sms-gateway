@@ -148,7 +148,7 @@ func TestCreateAPIKey(t *testing.T) {
 	repo := setupTestDB(t)
 
 	user, _ := repo.CreateUser("keyuser", "hash", false, false)
-	key, err := repo.CreateAPIKey("testapikey123", "test label", user.ID)
+	key, err := repo.CreateAPIKey("testapikey123", "test label", user.ID, false)
 	if err != nil {
 		t.Fatalf("CreateAPIKey() error = %v", err)
 	}
@@ -161,13 +161,35 @@ func TestCreateAPIKey(t *testing.T) {
 	if !key.IsActive {
 		t.Error("key.IsActive should be true")
 	}
+	if key.IsTest {
+		t.Error("key.IsTest should be false for a live key")
+	}
+}
+
+// TestCreateAPIKey_TestMode checks the test flag survives the round trip
+// through storage, since it is what keeps a key away from the modem.
+func TestCreateAPIKey_TestMode(t *testing.T) {
+	repo := setupTestDB(t)
+
+	user, _ := repo.CreateUser("testkeyuser", "hash", false, false)
+	if _, err := repo.CreateAPIKey("test-mode-key", "staging", user.ID, true); err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+
+	found, err := repo.GetAPIKeyByKey("test-mode-key")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByKey() error = %v", err)
+	}
+	if !found.IsTest {
+		t.Error("found.IsTest should be true")
+	}
 }
 
 func TestGetAPIKeyByKey(t *testing.T) {
 	repo := setupTestDB(t)
 
 	user, _ := repo.CreateUser("keyuser2", "hash", false, false)
-	created, _ := repo.CreateAPIKey("findthiskey", "label", user.ID)
+	created, _ := repo.CreateAPIKey("findthiskey", "label", user.ID, false)
 
 	found, err := repo.GetAPIKeyByKey("findthiskey")
 	if err != nil {
@@ -184,7 +206,7 @@ func TestGetAPIKeyByKey(t *testing.T) {
 func TestAPIKeysAreStoredHashed(t *testing.T) {
 	repo := setupTestDB(t)
 	user, _ := repo.CreateUser("hashuser", "hash", false, false)
-	created, _ := repo.CreateAPIKey("plaintext-key", "label", user.ID)
+	created, _ := repo.CreateAPIKey("plaintext-key", "label", user.ID, false)
 
 	var stored string
 	if err := repo.db.QueryRow(`SELECT key FROM api_keys WHERE id = ?`, created.ID).Scan(&stored); err != nil {
@@ -205,7 +227,7 @@ func TestAPIKeysAreStoredHashed(t *testing.T) {
 func TestHashLegacyAPIKeys(t *testing.T) {
 	repo := setupTestDB(t)
 	user, _ := repo.CreateUser("legacyuser", "hash", false, false)
-	if _, err := repo.CreateAPIKey("already-hashed", "new", user.ID); err != nil {
+	if _, err := repo.CreateAPIKey("already-hashed", "new", user.ID, false); err != nil {
 		t.Fatalf("CreateAPIKey() error = %v", err)
 	}
 	// A key as earlier releases stored it: plaintext.
@@ -236,7 +258,7 @@ func TestDeactivateAPIKey(t *testing.T) {
 	repo := setupTestDB(t)
 
 	user, _ := repo.CreateUser("keyuser3", "hash", false, false)
-	key, _ := repo.CreateAPIKey("deactivateme", "label", user.ID)
+	key, _ := repo.CreateAPIKey("deactivateme", "label", user.ID, false)
 
 	err := repo.DeactivateAPIKey(key.ID, "")
 	if err != nil {
@@ -255,7 +277,7 @@ func TestAPIKeyChangesAreScopedToOwner(t *testing.T) {
 
 	owner, _ := repo.CreateUser("keyowner", "hash", false, false)
 	other, _ := repo.CreateUser("keyother", "hash", false, false)
-	key, _ := repo.CreateAPIKey("scopedkey", "label", owner.ID)
+	key, _ := repo.CreateAPIKey("scopedkey", "label", owner.ID, false)
 
 	if err := repo.DeactivateAPIKey(key.ID, other.ID); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("DeactivateAPIKey() by another user error = %v, want sql.ErrNoRows", err)
@@ -305,8 +327,8 @@ func TestListAPIKeys(t *testing.T) {
 	repo := setupTestDB(t)
 
 	user, _ := repo.CreateUser("keyuser4", "hash", false, false)
-	_, _ = repo.CreateAPIKey("key1", "label1", user.ID)
-	_, _ = repo.CreateAPIKey("key2", "label2", user.ID)
+	_, _ = repo.CreateAPIKey("key1", "label1", user.ID, false)
+	_, _ = repo.CreateAPIKey("key2", "label2", user.ID, false)
 
 	keys, err := repo.ListAPIKeys(ListOptions{})
 	if err != nil {
@@ -320,7 +342,7 @@ func TestListAPIKeys(t *testing.T) {
 func TestCreateMessage(t *testing.T) {
 	repo := setupTestDB(t)
 
-	msg, err := repo.CreateMessage(models.DirectionOutbound, "+15551234567", "Hello", models.StatusPending, nil)
+	msg, err := repo.CreateMessage(models.DirectionOutbound, "+15551234567", "Hello", models.StatusPending, nil, false)
 	if err != nil {
 		t.Fatalf("CreateMessage() error = %v", err)
 	}
@@ -338,7 +360,7 @@ func TestCreateMessage(t *testing.T) {
 func TestGetMessage(t *testing.T) {
 	repo := setupTestDB(t)
 
-	created, _ := repo.CreateMessage(models.DirectionInbound, "+15559876543", "Hi there", models.StatusReceived, nil)
+	created, _ := repo.CreateMessage(models.DirectionInbound, "+15559876543", "Hi there", models.StatusReceived, nil, false)
 
 	found, err := repo.GetMessage(created.ID)
 	if err != nil {
@@ -352,9 +374,9 @@ func TestGetMessage(t *testing.T) {
 func TestListMessages(t *testing.T) {
 	repo := setupTestDB(t)
 
-	_, _ = repo.CreateMessage(models.DirectionInbound, "+1111", "in1", models.StatusReceived, nil)
-	_, _ = repo.CreateMessage(models.DirectionInbound, "+2222", "in2", models.StatusReceived, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "out1", models.StatusSent, nil)
+	_, _ = repo.CreateMessage(models.DirectionInbound, "+1111", "in1", models.StatusReceived, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionInbound, "+2222", "in2", models.StatusReceived, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "out1", models.StatusSent, nil, false)
 
 	inbound, err := repo.ListMessages(models.DirectionInbound, nil, ListOptions{})
 	if err != nil {
@@ -376,9 +398,9 @@ func TestListMessages(t *testing.T) {
 func TestListMessages_FilterByStatus(t *testing.T) {
 	repo := setupTestDB(t)
 
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+1111", "msg1", models.StatusSent, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+2222", "msg2", models.StatusFailed, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "msg3", models.StatusSent, nil)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+1111", "msg1", models.StatusSent, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+2222", "msg2", models.StatusFailed, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "msg3", models.StatusSent, nil, false)
 
 	sent := models.StatusSent
 	filtered, err := repo.ListMessages(models.DirectionOutbound, &sent, ListOptions{})
@@ -410,7 +432,7 @@ func TestListMessages_PaginationCoversEveryRowExactlyOnce(t *testing.T) {
 	const total = 25
 	want := make(map[string]bool, total)
 	for i := 0; i < total; i++ {
-		m, err := repo.CreateMessage(models.DirectionInbound, "+1111", "body", models.StatusReceived, nil)
+		m, err := repo.CreateMessage(models.DirectionInbound, "+1111", "body", models.StatusReceived, nil, false)
 		if err != nil {
 			t.Fatalf("CreateMessage(%d) error = %v", i, err)
 		}
@@ -455,7 +477,7 @@ func TestListMessages_LimitAndOffset(t *testing.T) {
 	repo := setupTestDB(t)
 
 	for i := 0; i < 5; i++ {
-		_, _ = repo.CreateMessage(models.DirectionOutbound, "+1111", "body", models.StatusSent, nil)
+		_, _ = repo.CreateMessage(models.DirectionOutbound, "+1111", "body", models.StatusSent, nil, false)
 	}
 
 	all, err := repo.ListMessages(models.DirectionOutbound, nil, ListOptions{})
@@ -504,9 +526,9 @@ func TestListMessages_LimitAndOffset(t *testing.T) {
 func TestCountMessages(t *testing.T) {
 	repo := setupTestDB(t)
 
-	_, _ = repo.CreateMessage(models.DirectionInbound, "+1111", "in1", models.StatusReceived, nil)
-	_, _ = repo.CreateMessage(models.DirectionInbound, "+2222", "in2", models.StatusRead, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "out1", models.StatusSent, nil)
+	_, _ = repo.CreateMessage(models.DirectionInbound, "+1111", "in1", models.StatusReceived, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionInbound, "+2222", "in2", models.StatusRead, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "out1", models.StatusSent, nil, false)
 
 	got, err := repo.CountMessages(models.DirectionInbound, nil)
 	if err != nil {
@@ -537,12 +559,12 @@ func TestCountMessages(t *testing.T) {
 func TestMessageStats(t *testing.T) {
 	repo := setupTestDB(t)
 
-	_, _ = repo.CreateMessage(models.DirectionInbound, "+1111", "unread", models.StatusReceived, nil)
-	_, _ = repo.CreateMessage(models.DirectionInbound, "+2222", "read", models.StatusRead, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "sent", models.StatusSent, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+4444", "pending", models.StatusPending, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+5555", "sending", models.StatusSending, nil)
-	_, _ = repo.CreateMessage(models.DirectionOutbound, "+6666", "failed", models.StatusFailed, nil)
+	_, _ = repo.CreateMessage(models.DirectionInbound, "+1111", "unread", models.StatusReceived, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionInbound, "+2222", "read", models.StatusRead, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+3333", "sent", models.StatusSent, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+4444", "pending", models.StatusPending, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+5555", "sending", models.StatusSending, nil, false)
+	_, _ = repo.CreateMessage(models.DirectionOutbound, "+6666", "failed", models.StatusFailed, nil, false)
 
 	stats, err := repo.MessageStats()
 	if err != nil {
@@ -595,7 +617,7 @@ func TestMessageStats_EmptyTable(t *testing.T) {
 func TestUpdateMessageStatus(t *testing.T) {
 	repo := setupTestDB(t)
 
-	msg, _ := repo.CreateMessage(models.DirectionOutbound, "+1111", "test", models.StatusPending, nil)
+	msg, _ := repo.CreateMessage(models.DirectionOutbound, "+1111", "test", models.StatusPending, nil, false)
 
 	err := repo.UpdateMessageStatus(msg.ID, models.StatusSent, nil, nil)
 	if err != nil {
@@ -611,7 +633,7 @@ func TestUpdateMessageStatus(t *testing.T) {
 func TestUpdateMessageStatus_WithError(t *testing.T) {
 	repo := setupTestDB(t)
 
-	msg, _ := repo.CreateMessage(models.DirectionOutbound, "+1111", "test", models.StatusPending, nil)
+	msg, _ := repo.CreateMessage(models.DirectionOutbound, "+1111", "test", models.StatusPending, nil, false)
 
 	errMsg := "modem timeout"
 	err := repo.UpdateMessageStatus(msg.ID, models.StatusFailed, nil, &errMsg)
@@ -631,7 +653,7 @@ func TestUpdateMessageStatus_WithError(t *testing.T) {
 func TestMarkMessageRead(t *testing.T) {
 	repo := setupTestDB(t)
 
-	msg, _ := repo.CreateMessage(models.DirectionInbound, "+1111", "hello", models.StatusReceived, nil)
+	msg, _ := repo.CreateMessage(models.DirectionInbound, "+1111", "hello", models.StatusReceived, nil, false)
 
 	err := repo.MarkMessageRead(msg.ID)
 	if err != nil {
@@ -647,7 +669,7 @@ func TestMarkMessageRead(t *testing.T) {
 func TestMarkMessageRead_AlreadyRead(t *testing.T) {
 	repo := setupTestDB(t)
 
-	msg, _ := repo.CreateMessage(models.DirectionInbound, "+1111", "hello", models.StatusReceived, nil)
+	msg, _ := repo.CreateMessage(models.DirectionInbound, "+1111", "hello", models.StatusReceived, nil, false)
 	_ = repo.MarkMessageRead(msg.ID)
 
 	err := repo.MarkMessageRead(msg.ID)
@@ -659,7 +681,7 @@ func TestMarkMessageRead_AlreadyRead(t *testing.T) {
 func TestMarkMessageRead_OutboundMessage(t *testing.T) {
 	repo := setupTestDB(t)
 
-	msg, _ := repo.CreateMessage(models.DirectionOutbound, "+1111", "hello", models.StatusSent, nil)
+	msg, _ := repo.CreateMessage(models.DirectionOutbound, "+1111", "hello", models.StatusSent, nil, false)
 
 	err := repo.MarkMessageRead(msg.ID)
 	if err == nil {

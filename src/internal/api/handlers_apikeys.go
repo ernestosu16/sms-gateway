@@ -76,7 +76,7 @@ func (h *KeyHandler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 // HandleCreateAPIKey generates a new API key for the authenticated user.
 //
 // @Summary      Create API key
-// @Description  Generates a new API key for the authenticated user with an optional label.
+// @Description  Generates a new API key for the authenticated user with an optional label. Set is_test to create a test key: it reads like any other key, but the SMS it sends are simulated and never reach the modem. The mode cannot be changed afterwards.
 // @Tags         API Keys
 // @Accept       json
 // @Produce      json
@@ -106,7 +106,7 @@ func (h *KeyHandler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	apiKey, err := h.repo.CreateAPIKey(key, req.Label, claims.UserID)
+	apiKey, err := h.repo.CreateAPIKey(key, req.Label, claims.UserID, req.IsTest)
 	if err != nil {
 		writeInternalError(w, "failed to create API key")
 		return

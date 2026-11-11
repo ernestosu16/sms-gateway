@@ -98,6 +98,7 @@ const es: Record<MessageKey, string> = {
   'status.unread': 'Sin leer',
   'status.read': 'Leído',
   'status.received': 'Recibido',
+  'status.simulated': 'Simulado',
   'direction.in': 'ENT',
   'direction.out': 'SAL',
   'table.selectRow': 'Seleccionar fila',
@@ -266,6 +267,12 @@ const es: Record<MessageKey, string> = {
   'apiKeys.loading': 'Cargando claves API…',
   'apiKeys.empty': 'No se encontraron claves API.',
   'apiKeys.items': 'claves API',
+  'apiKeys.mode': 'Modo',
+  'apiKeys.modeLive': 'Producción',
+  'apiKeys.modeTest': 'Prueba',
+  'apiKeys.modeTestHint':
+    'Una clave de prueba lee los mensajes como cualquier otra, pero los SMS que envía son simulados: se guardan y se notifican a los webhooks como enviados sin llegar nunca al módem. El modo no se puede cambiar después.',
+  'apiKeys.createdTest': 'Esta es una clave de prueba: los SMS que envía son simulados.',
 
   // Users
   'users.description': 'Gestiona las cuentas de usuario.',

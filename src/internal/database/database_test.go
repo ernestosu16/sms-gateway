@@ -75,7 +75,7 @@ func TestConcurrentDeleteMessages(t *testing.T) {
 	const n = 50
 	ids := make([]string, n)
 	for i := range ids {
-		msg, err := repo.CreateMessage(models.DirectionInbound, "+15551234567", "Hello", models.StatusReceived, nil)
+		msg, err := repo.CreateMessage(models.DirectionInbound, "+15551234567", "Hello", models.StatusReceived, nil, false)
 		if err != nil {
 			t.Fatalf("CreateMessage() error = %v", err)
 		}

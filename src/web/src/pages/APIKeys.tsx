@@ -22,6 +22,7 @@ import {
   LoadingState,
   PageHeader,
   PlusIcon,
+  Select,
   useConfirm,
   type Column,
 } from '@/components/ui';
@@ -30,6 +31,7 @@ interface APIKey {
   id: string;
   label: string;
   is_active: boolean;
+  is_test: boolean;
   created_at: string;
 }
 
@@ -53,7 +55,8 @@ export default function APIKeys() {
   const [actionError, setActionError] = useState('');
   const [label, setLabel] = useState('');
   const [creating, setCreating] = useState(false);
-  const [newKey, setNewKey] = useState<string | null>(null);
+  const [isTest, setIsTest] = useState(false);
+  const [newKey, setNewKey] = useState<{ key: string; isTest: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
   const { confirm, dialog } = useConfirm();
 
@@ -65,9 +68,10 @@ export default function APIKeys() {
     setCreating(true);
     setActionError('');
     try {
-      const response = await api.post('/apikeys', { label: label.trim() });
-      setNewKey(response.data.api_key.key);
+      const response = await api.post('/apikeys', { label: label.trim(), is_test: isTest });
+      setNewKey({ key: response.data.api_key.key, isTest: response.data.api_key.is_test });
       setLabel('');
+      setIsTest(false);
       refresh();
     } catch {
       setActionError(t('apiKeys.createFailed'));
@@ -138,6 +142,17 @@ export default function APIKeys() {
         ),
     },
     {
+      key: 'mode',
+      header: t('apiKeys.mode'),
+      mobile: 'title',
+      cell: (k) =>
+        k.is_test ? (
+          <Badge tone="warning">{t('apiKeys.modeTest')}</Badge>
+        ) : (
+          <Badge tone="primary">{t('apiKeys.modeLive')}</Badge>
+        ),
+    },
+    {
       key: 'created',
       header: t('common.created'),
       className: 'whitespace-nowrap text-fg-muted',
@@ -173,12 +188,13 @@ export default function APIKeys() {
       {newKey && (
         <Alert tone="warning">
           <p className="font-semibold">{t('apiKeys.created')}</p>
+          {newKey.isTest && <p className="mt-1">{t('apiKeys.createdTest')}</p>}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <code className="min-w-0 flex-1 rounded-lg border border-border bg-field px-3 py-2 font-mono text-sm break-all text-fg">
-              {newKey}
+              {newKey.key}
             </code>
             <Button
-              onClick={() => handleCopy(newKey)}
+              onClick={() => handleCopy(newKey.key)}
               icon={copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
             >
               {copied ? t('common.copied') : t('common.copy')}
@@ -209,10 +225,22 @@ export default function APIKeys() {
                 placeholder={t('apiKeys.labelPlaceholder')}
               />
             </Field>
+            <Field label={t('apiKeys.mode')} htmlFor="keyMode">
+              <Select
+                id="keyMode"
+                value={isTest ? 'test' : 'live'}
+                onChange={(e) => setIsTest(e.target.value === 'test')}
+                className="w-full sm:w-auto"
+              >
+                <option value="live">{t('apiKeys.modeLive')}</option>
+                <option value="test">{t('apiKeys.modeTest')}</option>
+              </Select>
+            </Field>
             <Button type="submit" loading={creating} icon={<PlusIcon className="h-4 w-4" />}>
               {creating ? t('common.creating') : t('apiKeys.create')}
             </Button>
           </form>
+          {isTest && <p className="mt-3 text-xs text-fg-subtle">{t('apiKeys.modeTestHint')}</p>}
         </CardBody>
       </Card>
 

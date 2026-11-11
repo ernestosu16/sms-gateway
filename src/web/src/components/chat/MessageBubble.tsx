@@ -142,6 +142,11 @@ export default function MessageBubble({
             outbound && !failed ? 'text-primary-fg/75' : 'text-fg-subtle',
           )}
         >
+          {message.simulated && (
+            <span className="rounded-sm border border-current px-1 py-px font-medium uppercase">
+              {t('status.simulated')}
+            </span>
+          )}
           <time dateTime={message.created_at}>{formatTime(message.created_at)}</time>
           {outbound && <StatusIndicator status={message.status} />}
         </button>
@@ -167,7 +172,10 @@ export default function MessageBubble({
         <div className="mt-1 w-full max-w-[85%] rounded-lg border border-border bg-surface p-3 text-xs text-fg-muted shadow-sm sm:max-w-[70%]">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             <dt className="font-medium text-fg">{t('common.status')}</dt>
-            <dd>{statusLabel(message.status, t)}</dd>
+            <dd>
+              {statusLabel(message.status, t)}
+              {message.simulated && ` · ${t('status.simulated')}`}
+            </dd>
             <dt className="font-medium text-fg">
               {outbound ? t('status.sent') : t('status.received')}
             </dt>

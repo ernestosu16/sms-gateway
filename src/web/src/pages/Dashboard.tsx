@@ -11,6 +11,7 @@ import {
   chatPath,
   notifyConversationsChanged,
   onConversationsChanged,
+  type Contact,
   type Message,
 } from '@/lib/messages';
 import { usePolling } from '@/lib/usePolling';
@@ -83,6 +84,8 @@ export default function Dashboard() {
   const [modemStatus, setModemStatus] = useState<ModemStatus | null>(null);
   const [modemSignal, setModemSignal] = useState<ModemSignal | null>(null);
   const [recentMessages, setRecentMessages] = useState<Message[]>([]);
+  // Saved names by number; messages carry only the number.
+  const [contactNames, setContactNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   // Counts come from the app-wide activity watcher, which also tells this page
   // when a message arrives, is sent or changes status.
@@ -113,10 +116,17 @@ export default function Dashboard() {
   // The recent list asks for only the rows it renders instead of downloading
   // both mailboxes.
   const fetchRecent = useCallback(async () => {
-    const [inboxRes, outboxRes] = await Promise.allSettled([
+    const [inboxRes, outboxRes, contactsRes] = await Promise.allSettled([
       api.get<Message[]>('/sms/inbox', { params: { all: 'true', limit: RECENT_LIMIT } }),
       api.get<Message[]>('/sms/outbox', { params: { limit: RECENT_LIMIT } }),
+      api.get<Contact[]>('/contacts'),
     ]);
+    // Without names the numbers still show, so a failed lookup is not an error.
+    if (contactsRes.status === 'fulfilled') {
+      setContactNames(
+        Object.fromEntries(contactsRes.value.data.map((c) => [c.phone_number, c.name])),
+      );
+    }
     const inbox = inboxRes.status === 'fulfilled' ? inboxRes.value.data : [];
     const outbox = outboxRes.status === 'fulfilled' ? outboxRes.value.data : [];
 
@@ -299,6 +309,7 @@ export default function Dashboard() {
             <ul className="divide-y divide-border">
               {recentMessages.map((msg) => {
                 const unread = msg.direction === 'inbound' && msg.status === 'received';
+                const contactName = contactNames[msg.phone_number];
                 return (
                   <li key={msg.id}>
                     <button
@@ -311,12 +322,15 @@ export default function Dashboard() {
                           <DirectionBadge direction={msg.direction} />
                           <span
                             className={cn(
-                              'text-sm text-fg',
+                              'min-w-0 text-sm break-words text-fg',
                               unread ? 'font-semibold' : 'font-medium',
                             )}
                           >
-                            {msg.phone_number}
+                            {contactName || msg.phone_number}
                           </span>
+                          {contactName && (
+                            <span className="text-xs text-fg-subtle">{msg.phone_number}</span>
+                          )}
                           {msg.direction === 'inbound' && (
                             <MessageStatusBadge status={msg.status} />
                           )}

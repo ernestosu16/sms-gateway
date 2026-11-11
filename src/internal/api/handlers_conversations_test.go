@@ -16,7 +16,7 @@ import (
 func TestHandleListConversations(t *testing.T) {
 	handler, repo := newSMSTestHandler(t)
 	seedMessages(t, repo, models.DirectionInbound, models.StatusReceived, 3)
-	if _, err := repo.CreateMessage(models.DirectionOutbound, "+1555111", "hi", models.StatusSent, nil); err != nil {
+	if _, err := repo.CreateMessage(models.DirectionOutbound, "+1555111", "hi", models.StatusSent, nil, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -98,7 +98,7 @@ func TestHandleConversationEndpoints_RequirePhone(t *testing.T) {
 
 func TestHandleGetConversationMessages_BeforeIDFromOtherThread(t *testing.T) {
 	handler, repo := newSMSTestHandler(t)
-	other, _ := repo.CreateMessage(models.DirectionInbound, "+1999", "x", models.StatusReceived, nil)
+	other, _ := repo.CreateMessage(models.DirectionInbound, "+1999", "x", models.StatusReceived, nil, false)
 
 	q := url.Values{"phone": {"+1555"}, "before_id": {other.ID}}
 	w := httptest.NewRecorder()

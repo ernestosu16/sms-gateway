@@ -34,7 +34,7 @@ func newSMSTestHandler(t *testing.T) (*SMSHandler, *database.Repository) {
 func seedMessages(t *testing.T, repo *database.Repository, direction models.Direction, status models.MessageStatus, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
-		if _, err := repo.CreateMessage(direction, "+1555000000", fmt.Sprintf("body %d", i), status, nil); err != nil {
+		if _, err := repo.CreateMessage(direction, "+1555000000", fmt.Sprintf("body %d", i), status, nil, false); err != nil {
 			t.Fatalf("seeding message %d: %v", i, err)
 		}
 	}
@@ -298,7 +298,7 @@ func TestHandleSendSMS_NotifiesWebhooks(t *testing.T) {
 				t.Fatalf("CreateWebhook() error = %v", err)
 			}
 			user, _ := repo.CreateUser("sender", "hash", false, false)
-			key, err := repo.CreateAPIKey("key-value", "script", user.ID)
+			key, err := repo.CreateAPIKey("key-value", "script", user.ID, false)
 			if err != nil {
 				t.Fatalf("CreateAPIKey() error = %v", err)
 			}
@@ -383,5 +383,94 @@ func TestHandleSendSMSRejectsATInjection(t *testing.T) {
 				t.Errorf("stored outbound messages = %d (err %v), want 0", total, err)
 			}
 		})
+	}
+}
+
+// TestHandleSendSMS_TestKeySimulates checks a test API key never reaches the
+// modem: the send is stored and reported to webhooks as sent, flagged as
+// simulated, while a live key still sends for real.
+func TestHandleSendSMS_TestKeySimulates(t *testing.T) {
+	tests := []struct {
+		name          string
+		isTest        bool
+		wantModemSent int
+	}{
+		{"test key", true, 0},
+		{"live key", false, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := webhooktest.NewRepository(t)
+			receiver := webhooktest.NewReceiver(t)
+			if _, err := repo.CreateWebhook("test", receiver.URL, "whsec_test_secret_value", []models.WebhookEvent{models.EventMessageSent}, true); err != nil {
+				t.Fatalf("CreateWebhook() error = %v", err)
+			}
+			user, _ := repo.CreateUser("sender", "hash", false, false)
+			key, err := repo.CreateAPIKey("key-value", "script", user.ID, tt.isTest)
+			if err != nil {
+				t.Fatalf("CreateAPIKey() error = %v", err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			mock := modem.NewMockModem()
+			handler := NewSMSHandler(repo, mock, webhook.NewDispatcher(ctx, repo))
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+15557654321","body":"hello"}`))
+			req = req.WithContext(context.WithValue(req.Context(), contextKeyAPIKey, key))
+			w := httptest.NewRecorder()
+			handler.HandleSendSMS(w, req)
+
+			var resp models.SendSMSResponse
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("decoding response: %v", err)
+			}
+			if w.Code != http.StatusOK || resp.Status != models.StatusSent || resp.Simulated != tt.isTest {
+				t.Errorf("response = %d %+v, want 200 sent with simulated=%v", w.Code, resp, tt.isTest)
+			}
+			if sent := mock.SentMessages(); len(sent) != tt.wantModemSent {
+				t.Errorf("modem received %d messages, want %d", len(sent), tt.wantModemSent)
+			}
+
+			stored, err := repo.GetMessage(resp.ID)
+			if err != nil {
+				t.Fatalf("GetMessage() error = %v", err)
+			}
+			if stored.Status != models.StatusSent || stored.Simulated != tt.isTest {
+				t.Errorf("stored message = %+v, want sent with simulated=%v", stored, tt.isTest)
+			}
+
+			d := receiver.Next(t)
+			if d.Payload.Event != models.EventMessageSent || d.Payload.Data == nil || d.Payload.Data.Simulated != tt.isTest {
+				t.Errorf("webhook payload = %+v, want message.sent with simulated=%v", d.Payload, tt.isTest)
+			}
+		})
+	}
+}
+
+// TestHandleSendSMS_TestKeyRespectsSendPolicy checks a simulated send is still
+// refused for a blocked destination, so a client under test sees the errors it
+// would get in production.
+func TestHandleSendSMS_TestKeyRespectsSendPolicy(t *testing.T) {
+	h, repo := newSMSTestHandler(t)
+	if _, err := repo.SaveSendCountryPolicy(models.SendCountriesSelected, []string{"US"}); err != nil {
+		t.Fatalf("SaveSendCountryPolicy() error = %v", err)
+	}
+	user, _ := repo.CreateUser("sender", "hash", false, false)
+	key, err := repo.CreateAPIKey("key-value", "script", user.ID, true)
+	if err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+34612345678","body":"hi"}`))
+	req = req.WithContext(context.WithValue(req.Context(), contextKeyAPIKey, key))
+	rec := httptest.NewRecorder()
+	h.HandleSendSMS(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	if total, err := repo.CountMessages(models.DirectionOutbound, nil); err != nil || total != 0 {
+		t.Errorf("stored outbound messages = %d (err %v), want 0", total, err)
 	}
 }

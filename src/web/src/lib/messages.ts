@@ -9,6 +9,8 @@ export interface Message {
   api_key_id?: string;
   modem_response?: string;
   error_message?: string;
+  /** Sent by a test API key: stored as sent but never handed to the modem. */
+  simulated?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +38,7 @@ export interface SendSMSResponse {
   id: string;
   status: string;
   message?: string;
+  simulated?: boolean;
 }
 
 /**

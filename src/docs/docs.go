@@ -83,7 +83,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Generates a new API key for the authenticated user with an optional label.",
+                "description": "Generates a new API key for the authenticated user with an optional label. Set is_test to create a test key: it reads like any other key, but the SMS it sends are simulated and never reach the modem. The mode cannot be changed afterwards.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1466,7 +1466,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy.",
+                "description": "Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy. A test API key simulates the send: the message is validated, stored and reported to webhooks as sent with simulated=true, but never reaches the modem.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2320,6 +2320,10 @@ const docTemplate = `{
                 "is_active": {
                     "type": "boolean"
                 },
+                "is_test": {
+                    "description": "IsTest marks a test key: it reads like any other key, but an SMS it\nsends is simulated and never reaches the modem. Fixed at creation.",
+                    "type": "boolean"
+                },
                 "key": {
                     "description": "Key is the plaintext key, set only in the response that creates it.",
                     "type": "string"
@@ -2455,6 +2459,10 @@ const docTemplate = `{
         "models.CreateAPIKeyRequest": {
             "type": "object",
             "properties": {
+                "is_test": {
+                    "description": "IsTest creates a test key, whose sends are simulated instead of reaching\nthe modem. It cannot be changed afterwards.",
+                    "type": "boolean"
+                },
                 "label": {
                     "type": "string"
                 }
@@ -2557,6 +2565,10 @@ const docTemplate = `{
                 },
                 "phone_number": {
                     "type": "string"
+                },
+                "simulated": {
+                    "description": "Simulated is true for a message a test API key \"sent\": it was stored\nand reported as sent, but never handed to the modem.",
+                    "type": "boolean"
                 },
                 "status": {
                     "$ref": "#/definitions/models.MessageStatus"
@@ -2807,6 +2819,10 @@ const docTemplate = `{
                 },
                 "message": {
                     "type": "string"
+                },
+                "simulated": {
+                    "description": "Simulated is true when a test API key sent the message, so it was not\nhanded to the modem.",
+                    "type": "boolean"
                 },
                 "status": {
                     "$ref": "#/definitions/models.MessageStatus"

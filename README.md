@@ -88,6 +88,7 @@ off a runbook.
 
 - REST API with JWT and API key authentication
 - API key management for programmatic access (deactivate or delete keys)
+- Test API keys for dev/staging: they read messages normally, but the SMS they send are simulated (stored and reported to webhooks as sent with `simulated: true`, never handed to the modem)
 - Signed webhooks for real-time notifications on received, sent and failed messages
 - User management with admin roles; admins can delete non-admin users (admin accounts are protected)
 - **Modem** page with three tabs: **Modem Test**, **Modem Setup** (carrier profiles whose AT commands prepare a SIM) and **Send Countries** (which countries outbound SMS may go to)
@@ -346,7 +347,7 @@ Open the WebUI at `http://localhost:5174` and sign in with an admin account. The
 | **Dashboard** | Modem status, signal strength, sent/received totals, a quick send form and the most recent messages. |
 | **Messages** | All conversations, grouped by phone number. Open one to read and reply, rename the contact, copy the number or delete the conversation. **New message** starts a conversation with any number. Failed sends can be retried from the thread. |
 | **Contacts** | Search, create, rename and delete contact names. Deleting a contact keeps its messages. |
-| **API Keys** | Create keys for external integrations (for example, OpenClaw), then deactivate or delete them. The key is shown only once. |
+| **API Keys** | Create keys for external integrations (for example, OpenClaw), then deactivate or delete them. The key is shown only once. Choose **Test** mode when creating a key to simulate its sends instead of using the modem; the mode cannot be changed later. |
 | **Webhooks** | Admin only. Create, edit, pause, resume and delete webhooks. See [Webhooks](#webhooks). |
 | **Users** | Admin only. Create users, grant admin rights and delete non-admin users. |
 | **Modem** | Admin only, except the status cards. Tabs for **Modem Test** (status, signal and the AT console), **Modem Setup** (carrier profiles) and **Send Countries** (allowed destination countries). |

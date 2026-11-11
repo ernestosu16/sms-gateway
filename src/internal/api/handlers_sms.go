@@ -80,7 +80,7 @@ func NewSMSHandler(repo *database.Repository, m modem.Modem, webhooks *webhook.D
 // HandleSendSMS sends an SMS message.
 //
 // @Summary      Send SMS
-// @Description  Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy.
+// @Description  Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy. A test API key simulates the send: the message is validated, stored and reported to webhooks as sent with simulated=true, but never reaches the modem.
 // @Tags         SMS
 // @Accept       json
 // @Produce      json
@@ -122,16 +122,33 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine API key ID if authenticated via API key.
+	// Determine API key ID if authenticated via API key. A test key simulates
+	// the send: everything up to here ran as for a real one, so a client under
+	// test sees the same validation and policy errors it would in production.
 	var apiKeyID *string
+	simulated := false
 	if ak := GetAPIKeyFromContext(r.Context()); ak != nil {
 		apiKeyID = &ak.ID
+		simulated = ak.IsTest
 	}
 
 	// Create the message in pending status.
-	msg, err := h.repo.CreateMessage(models.DirectionOutbound, req.To, req.Body, models.StatusPending, apiKeyID)
+	msg, err := h.repo.CreateMessage(models.DirectionOutbound, req.To, req.Body, models.StatusPending, apiKeyID, simulated)
 	if err != nil {
 		writeInternalError(w, "failed to create message")
+		return
+	}
+
+	// A simulated send must never reach the modem, connected or not.
+	if simulated {
+		_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusSent, nil, nil)
+		h.notify(models.EventMessageSent, msg.ID)
+		writeJSON(w, http.StatusOK, models.SendSMSResponse{
+			ID:        msg.ID,
+			Status:    models.StatusSent,
+			Message:   "message simulated (test API key)",
+			Simulated: true,
+		})
 		return
 	}
 

@@ -204,7 +204,7 @@ func receiveSMS(repo *database.Repository, webhooks *webhook.Dispatcher) func(fr
 		// The body is not logged: inbound SMS often carry one-time codes, and
 		// logs are kept longer and read more widely than the database.
 		log.Printf("Received SMS from %s (%d characters)", from, utf8.RuneCountInString(body))
-		msg, err := repo.CreateMessage(models.DirectionInbound, from, body, models.StatusReceived, nil)
+		msg, err := repo.CreateMessage(models.DirectionInbound, from, body, models.StatusReceived, nil, false)
 		if err != nil {
 			log.Printf("Error saving inbound SMS: %v", err)
 			return err
@@ -351,7 +351,7 @@ func apikeyCmd() *cobra.Command {
 				return fmt.Errorf("generating API key: %w", err)
 			}
 
-			apiKey, err := repo.CreateAPIKey(key, label, userID)
+			apiKey, err := repo.CreateAPIKey(key, label, userID, false)
 			if err != nil {
 				return fmt.Errorf("creating API key: %w", err)
 			}

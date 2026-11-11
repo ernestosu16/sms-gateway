@@ -35,6 +35,11 @@ definitions:
         type: string
       is_active:
         type: boolean
+      is_test:
+        description: |-
+          IsTest marks a test key: it reads like any other key, but an SMS it
+          sends is simulated and never reaches the modem. Fixed at creation.
+        type: boolean
       key:
         description: Key is the plaintext key, set only in the response that creates
           it.
@@ -130,6 +135,11 @@ definitions:
     type: object
   models.CreateAPIKeyRequest:
     properties:
+      is_test:
+        description: |-
+          IsTest creates a test key, whose sends are simulated instead of reaching
+          the modem. It cannot be changed afterwards.
+        type: boolean
       label:
         type: string
     type: object
@@ -198,6 +208,11 @@ definitions:
         type: string
       phone_number:
         type: string
+      simulated:
+        description: |-
+          Simulated is true for a message a test API key "sent": it was stored
+          and reported as sent, but never handed to the modem.
+        type: boolean
       status:
         $ref: '#/definitions/models.MessageStatus'
       updated_at:
@@ -376,6 +391,11 @@ definitions:
         type: string
       message:
         type: string
+      simulated:
+        description: |-
+          Simulated is true when a test API key sent the message, so it was not
+          handed to the modem.
+        type: boolean
       status:
         $ref: '#/definitions/models.MessageStatus'
     type: object
@@ -571,8 +591,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Generates a new API key for the authenticated user with an optional
-        label.
+      description: 'Generates a new API key for the authenticated user with an optional
+        label. Set is_test to create a test key: it reads like any other key, but
+        the SMS it sends are simulated and never reach the modem. The mode cannot
+        be changed afterwards.'
       parameters:
       - description: API key creation request
         in: body
@@ -1594,8 +1616,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Sends an SMS message to the specified phone number via the GSM
-        modem. The destination must be allowed by the send country policy.
+      description: 'Sends an SMS message to the specified phone number via the GSM
+        modem. The destination must be allowed by the send country policy. A test
+        API key simulates the send: the message is validated, stored and reported
+        to webhooks as sent with simulated=true, but never reaches the modem.'
       parameters:
       - description: SMS message to send
         in: body

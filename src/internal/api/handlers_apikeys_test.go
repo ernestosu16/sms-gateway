@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -63,7 +65,7 @@ func TestHandleChangeAPIKeyOwnership(t *testing.T) {
 				owner, _ := repo.CreateUser("owner", "hash", false, false)
 				other, _ := repo.CreateUser("other", "hash", false, false)
 				admin, _ := repo.CreateUser("admin", "hash", true, false)
-				key, err := repo.CreateAPIKey("owner-key", "label", owner.ID)
+				key, err := repo.CreateAPIKey("owner-key", "label", owner.ID, false)
 				if err != nil {
 					t.Fatalf("CreateAPIKey() error = %v", err)
 				}
@@ -87,5 +89,42 @@ func TestHandleChangeAPIKeyOwnership(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestHandleCreateAPIKey_TestMode checks is_test in the request decides the
+// key's mode, and that omitting it creates a live key as before.
+func TestHandleCreateAPIKey_TestMode(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"test key", `{"label":"staging","is_test":true}`, true},
+		{"defaults to live", `{"label":"prod"}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newListTestRepo(t)
+			user, _ := repo.CreateUser("owner", "hash", false, false)
+
+			req := withClaims(httptest.NewRequest(http.MethodPost, "/api/v1/apikeys", strings.NewReader(tt.body)), user.ID, false)
+			w := httptest.NewRecorder()
+			NewKeyHandler(repo).HandleCreateAPIKey(w, req)
+
+			if w.Code != http.StatusCreated {
+				t.Fatalf("status = %d, want 201", w.Code)
+			}
+			var resp models.CreateAPIKeyResponse
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("decoding response: %v", err)
+			}
+			if resp.APIKey.IsTest != tt.want {
+				t.Errorf("response is_test = %v, want %v", resp.APIKey.IsTest, tt.want)
+			}
+			if stored := findKey(t, repo, resp.APIKey.ID); stored == nil || stored.IsTest != tt.want {
+				t.Errorf("stored key = %+v, want is_test=%v", stored, tt.want)
+			}
+		})
 	}
 }

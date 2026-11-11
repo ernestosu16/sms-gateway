@@ -17,7 +17,7 @@ func setCreatedAt(t *testing.T, repo *Repository, id, createdAt string) {
 
 func mustCreate(t *testing.T, repo *Repository, dir models.Direction, phone, body string, status models.MessageStatus) *models.Message {
 	t.Helper()
-	m, err := repo.CreateMessage(dir, phone, body, status, nil)
+	m, err := repo.CreateMessage(dir, phone, body, status, nil, false)
 	if err != nil {
 		t.Fatalf("CreateMessage() error = %v", err)
 	}

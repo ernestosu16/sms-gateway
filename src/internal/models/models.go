@@ -45,10 +45,13 @@ type User struct {
 type APIKey struct {
 	ID string `json:"id"`
 	// Key is the plaintext key, set only in the response that creates it.
-	Key       string    `json:"key,omitempty"`
-	Label     string    `json:"label"`
-	UserID    string    `json:"user_id"`
-	IsActive  bool      `json:"is_active"`
+	Key      string `json:"key,omitempty"`
+	Label    string `json:"label"`
+	UserID   string `json:"user_id"`
+	IsActive bool   `json:"is_active"`
+	// IsTest marks a test key: it reads like any other key, but an SMS it
+	// sends is simulated and never reaches the modem. Fixed at creation.
+	IsTest    bool      `json:"is_test"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -63,8 +66,11 @@ type Message struct {
 	APIKeyID      *string       `json:"api_key_id,omitempty"`
 	ModemResponse *string       `json:"modem_response,omitempty"`
 	ErrorMessage  *string       `json:"error_message,omitempty"`
-	CreatedAt     time.Time     `json:"created_at"`
-	UpdatedAt     time.Time     `json:"updated_at"`
+	// Simulated is true for a message a test API key "sent": it was stored
+	// and reported as sent, but never handed to the modem.
+	Simulated bool      `json:"simulated,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // WebhookEvent names an event a webhook can subscribe to.
@@ -182,6 +188,9 @@ type SendSMSResponse struct {
 	ID      string        `json:"id"`
 	Status  MessageStatus `json:"status"`
 	Message string        `json:"message,omitempty"`
+	// Simulated is true when a test API key sent the message, so it was not
+	// handed to the modem.
+	Simulated bool `json:"simulated,omitempty"`
 }
 
 // MessageStats holds message counts aggregated across the whole table.
@@ -216,6 +225,9 @@ type LoginResponse struct {
 // CreateAPIKeyRequest is the request body for creating an API key.
 type CreateAPIKeyRequest struct {
 	Label string `json:"label"`
+	// IsTest creates a test key, whose sends are simulated instead of reaching
+	// the modem. It cannot be changed afterwards.
+	IsTest bool `json:"is_test"`
 }
 
 // CreateAPIKeyResponse is the response body after creating an API key.

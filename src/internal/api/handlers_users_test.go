@@ -29,11 +29,11 @@ func TestDeleteUser(t *testing.T) {
 		createTestUser(t, repo, "root", password, true, false)
 		victim := createTestUser(t, repo, "victim", password, false, false)
 		victimToken := loginToken(t, h, "victim", password)
-		key, err := repo.CreateAPIKey("victim-key", "label", victim.ID)
+		key, err := repo.CreateAPIKey("victim-key", "label", victim.ID, false)
 		if err != nil {
 			t.Fatalf("CreateAPIKey() error = %v", err)
 		}
-		msg, err := repo.CreateMessage(models.DirectionOutbound, "+15550000000", "hi", models.StatusSent, &key.ID)
+		msg, err := repo.CreateMessage(models.DirectionOutbound, "+15550000000", "hi", models.StatusSent, &key.ID, false)
 		if err != nil {
 			t.Fatalf("CreateMessage() error = %v", err)
 		}

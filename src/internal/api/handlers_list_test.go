@@ -145,7 +145,7 @@ func TestHandleListUsers_InvalidParams(t *testing.T) {
 func seedKeys(t *testing.T, repo *database.Repository, userID, prefix string, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
-		if _, err := repo.CreateAPIKey(fmt.Sprintf("%s-key-%02d", prefix, i), "label", userID); err != nil {
+		if _, err := repo.CreateAPIKey(fmt.Sprintf("%s-key-%02d", prefix, i), "label", userID, false); err != nil {
 			t.Fatalf("CreateAPIKey(%s,%d): %v", prefix, i, err)
 		}
 	}

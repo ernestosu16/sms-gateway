@@ -120,7 +120,7 @@ func TestDispatch_SignedDeliveryToSubscribedWebhooks(t *testing.T) {
 	createWebhook(t, repo, other.URL, true, models.EventMessageSent)      // not subscribed
 	createWebhook(t, repo, other.URL, false, models.EventMessageReceived) // paused
 
-	msg, err := repo.CreateMessage(models.DirectionInbound, "+15551234567", "hello", models.StatusReceived, nil)
+	msg, err := repo.CreateMessage(models.DirectionInbound, "+15551234567", "hello", models.StatusReceived, nil, false)
 	if err != nil {
 		t.Fatalf("CreateMessage() error = %v", err)
 	}

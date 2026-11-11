@@ -22,8 +22,8 @@ func setupTestRepo(t *testing.T) *database.Repository {
 
 	schema := `
 	CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0, must_change_password INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT '');
-	CREATE TABLE api_keys (id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, label TEXT NOT NULL DEFAULT '', user_id TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT '');
-	CREATE TABLE messages (id TEXT PRIMARY KEY, direction TEXT NOT NULL, phone_number TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', api_key_id TEXT, modem_response TEXT, error_message TEXT, created_at TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT '');`
+	CREATE TABLE api_keys (id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, label TEXT NOT NULL DEFAULT '', user_id TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, is_test INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT '');
+	CREATE TABLE messages (id TEXT PRIMARY KEY, direction TEXT NOT NULL, phone_number TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', api_key_id TEXT, modem_response TEXT, error_message TEXT, is_simulated INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT '');`
 
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("creating schema: %v", err)

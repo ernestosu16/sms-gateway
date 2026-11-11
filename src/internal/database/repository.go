@@ -250,15 +250,17 @@ func hashAPIKey(key string) string {
 }
 
 // CreateAPIKey stores a new API key and returns it. The returned Key holds the
-// plaintext key; it is the only time it is available.
-func (r *Repository) CreateAPIKey(key, label, userID string) (*models.APIKey, error) {
+// plaintext key; it is the only time it is available. isTest makes it a test
+// key, whose sends are simulated; nothing changes it afterwards, so a test key
+// can never start sending real SMS.
+func (r *Repository) CreateAPIKey(key, label, userID string, isTest bool) (*models.APIKey, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	_, err := r.db.Exec(
-		`INSERT INTO api_keys (id, key, label, user_id, is_active, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 1, ?, ?)`,
-		id, hashAPIKey(key), label, userID, now, now,
+		`INSERT INTO api_keys (id, key, label, user_id, is_active, is_test, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
+		id, hashAPIKey(key), label, userID, boolToInt(isTest), now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating API key: %w", err)
@@ -317,7 +319,7 @@ func (r *Repository) getAPIKeyByID(id string) (*models.APIKey, error) {
 
 // apiKeyColumns is the column list shared by every API key SELECT. The stored
 // key is a hash, so it is never selected.
-const apiKeyColumns = `id, label, user_id, is_active, created_at, updated_at`
+const apiKeyColumns = `id, label, user_id, is_active, is_test, created_at, updated_at`
 
 // ListAPIKeys returns API keys newest first, limited according to opts.
 func (r *Repository) ListAPIKeys(opts ListOptions) ([]models.APIKey, error) {
@@ -427,8 +429,9 @@ func requireRowAffected(result sql.Result, action string) error {
 
 // --- Messages ---
 
-// CreateMessage inserts a new message and returns it.
-func (r *Repository) CreateMessage(direction models.Direction, phoneNumber, body string, status models.MessageStatus, apiKeyID *string) (*models.Message, error) {
+// CreateMessage inserts a new message and returns it. simulated marks a message
+// sent by a test API key, which is never handed to the modem.
+func (r *Repository) CreateMessage(direction models.Direction, phoneNumber, body string, status models.MessageStatus, apiKeyID *string, simulated bool) (*models.Message, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -437,9 +440,9 @@ func (r *Repository) CreateMessage(direction models.Direction, phoneNumber, body
 	phoneNumber = models.NormalizePhone(phoneNumber)
 
 	_, err := r.db.Exec(
-		`INSERT INTO messages (id, direction, phone_number, body, status, api_key_id, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, string(direction), phoneNumber, body, string(status), apiKeyID, now, now,
+		`INSERT INTO messages (id, direction, phone_number, body, status, api_key_id, is_simulated, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, string(direction), phoneNumber, body, string(status), apiKeyID, boolToInt(simulated), now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating message: %w", err)
@@ -450,15 +453,12 @@ func (r *Repository) CreateMessage(direction models.Direction, phoneNumber, body
 
 // GetMessage retrieves a message by ID.
 func (r *Repository) GetMessage(id string) (*models.Message, error) {
-	row := r.db.QueryRow(
-		`SELECT id, direction, phone_number, body, status, api_key_id, modem_response, error_message, created_at, updated_at
-		 FROM messages WHERE id = ?`, id,
-	)
+	row := r.db.QueryRow(`SELECT `+messageColumns+` FROM messages WHERE id = ?`, id)
 	return scanMessage(row)
 }
 
 // messageColumns is the column list shared by every message SELECT.
-const messageColumns = `id, direction, phone_number, body, status, api_key_id, modem_response, error_message, created_at, updated_at`
+const messageColumns = `id, direction, phone_number, body, status, api_key_id, modem_response, error_message, is_simulated, created_at, updated_at`
 
 // messageFilter builds the WHERE clause shared by ListMessages and CountMessages
 // so the two can never drift apart and report inconsistent totals.
@@ -1023,13 +1023,14 @@ func scanUserRows(rows *sql.Rows) (*models.User, error) {
 
 func scanAPIKey(s scannable) (*models.APIKey, error) {
 	var k models.APIKey
-	var isActive int
+	var isActive, isTest int
 	var createdAt, updatedAt string
-	err := s.Scan(&k.ID, &k.Label, &k.UserID, &isActive, &createdAt, &updatedAt)
+	err := s.Scan(&k.ID, &k.Label, &k.UserID, &isActive, &isTest, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scanning API key: %w", err)
 	}
 	k.IsActive = isActive != 0
+	k.IsTest = isTest != 0
 	k.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	k.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 	return &k, nil
@@ -1048,12 +1049,14 @@ func scanMessage(s scannable) (*models.Message, error) {
 func scanMessageWith(s scannable, extra ...any) (*models.Message, error) {
 	var m models.Message
 	var direction, status string
+	var simulated int
 	var createdAt, updatedAt string
-	dest := append([]any{&m.ID, &direction, &m.PhoneNumber, &m.Body, &status, &m.APIKeyID, &m.ModemResponse, &m.ErrorMessage, &createdAt, &updatedAt}, extra...)
+	dest := append([]any{&m.ID, &direction, &m.PhoneNumber, &m.Body, &status, &m.APIKeyID, &m.ModemResponse, &m.ErrorMessage, &simulated, &createdAt, &updatedAt}, extra...)
 	err := s.Scan(dest...)
 	if err != nil {
 		return nil, fmt.Errorf("scanning message: %w", err)
 	}
+	m.Simulated = simulated != 0
 	m.Direction = models.Direction(direction)
 	m.Status = models.MessageStatus(status)
 	m.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)

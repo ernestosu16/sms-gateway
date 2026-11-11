@@ -99,6 +99,7 @@ const en = {
   'status.unread': 'Unread',
   'status.read': 'Read',
   'status.received': 'Received',
+  'status.simulated': 'Simulated',
   'direction.in': 'IN',
   'direction.out': 'OUT',
   'table.selectRow': 'Select row',
@@ -267,6 +268,12 @@ const en = {
   'apiKeys.loading': 'Loading API keys…',
   'apiKeys.empty': 'No API keys found.',
   'apiKeys.items': 'API keys',
+  'apiKeys.mode': 'Mode',
+  'apiKeys.modeLive': 'Live',
+  'apiKeys.modeTest': 'Test',
+  'apiKeys.modeTestHint':
+    'A test key reads messages like any other, but the SMS it sends are simulated: they are stored and reported to webhooks as sent without ever reaching the modem. The mode cannot be changed later.',
+  'apiKeys.createdTest': 'This is a test key: the SMS it sends are simulated.',
 
   // Users
   'users.description': 'Manage user accounts.',
