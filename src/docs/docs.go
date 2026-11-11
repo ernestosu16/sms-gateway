@@ -2331,6 +2331,10 @@ const docTemplate = `{
                 "label": {
                     "type": "string"
                 },
+                "sent_count": {
+                    "description": "SentCount is how many SMS the key has sent, simulated sends included.\nFailed sends are not counted, and deleting messages does not lower it.",
+                    "type": "integer"
+                },
                 "updated_at": {
                     "type": "string"
                 },

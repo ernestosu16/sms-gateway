@@ -142,6 +142,7 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	// A simulated send must never reach the modem, connected or not.
 	if simulated {
 		_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusSent, nil, nil)
+		h.countSent(apiKeyID)
 		h.notify(models.EventMessageSent, msg.ID)
 		writeJSON(w, http.StatusOK, models.SendSMSResponse{
 			ID:        msg.ID,
@@ -166,6 +167,7 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusSent, nil, nil)
+	h.countSent(apiKeyID)
 	h.notify(models.EventMessageSent, msg.ID)
 
 	writeJSON(w, http.StatusOK, models.SendSMSResponse{
@@ -173,6 +175,17 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 		Status:  models.StatusSent,
 		Message: "message sent",
 	})
+}
+
+// countSent adds a sent message to the usage counter of the API key that sent
+// it, if any. The message is already out, so a failure here is only logged.
+func (h *SMSHandler) countSent(apiKeyID *string) {
+	if apiKeyID == nil {
+		return
+	}
+	if err := h.repo.IncrementAPIKeySentCount(*apiKeyID); err != nil {
+		log.Printf("api keys: counting sent message for key %s: %v", *apiKeyID, err)
+	}
 }
 
 // notify sends event to webhooks with the message as stored after its final

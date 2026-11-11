@@ -268,6 +268,7 @@ const es: Record<MessageKey, string> = {
   'apiKeys.empty': 'No se encontraron claves API.',
   'apiKeys.items': 'claves API',
   'apiKeys.mode': 'Modo',
+  'apiKeys.sentCount': 'Mensajes enviados',
   'apiKeys.modeLive': 'Producción',
   'apiKeys.modeTest': 'Prueba',
   'apiKeys.modeTestHint':

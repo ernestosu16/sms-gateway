@@ -439,6 +439,9 @@ func TestHandleSendSMS_TestKeySimulates(t *testing.T) {
 			if stored.Status != models.StatusSent || stored.Simulated != tt.isTest {
 				t.Errorf("stored message = %+v, want sent with simulated=%v", stored, tt.isTest)
 			}
+			if counted, err := repo.GetAPIKeyByKey("key-value"); err != nil || counted.SentCount != 1 {
+				t.Errorf("key sent_count = %+v (err %v), want 1", counted, err)
+			}
 
 			d := receiver.Next(t)
 			if d.Payload.Event != models.EventMessageSent || d.Payload.Data == nil || d.Payload.Data.Simulated != tt.isTest {
@@ -472,5 +475,25 @@ func TestHandleSendSMS_TestKeyRespectsSendPolicy(t *testing.T) {
 	}
 	if total, err := repo.CountMessages(models.DirectionOutbound, nil); err != nil || total != 0 {
 		t.Errorf("stored outbound messages = %d (err %v), want 0", total, err)
+	}
+}
+
+// TestHandleSendSMS_FailedSendIsNotCounted checks the key's usage counter only
+// counts messages that were actually sent.
+func TestHandleSendSMS_FailedSendIsNotCounted(t *testing.T) {
+	repo := webhooktest.NewRepository(t)
+	user, _ := repo.CreateUser("sender", "hash", false, false)
+	key, err := repo.CreateAPIKey("key-value", "script", user.ID, false)
+	if err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	handler := NewSMSHandler(repo, failingModem{modem.NewMockModem()}, webhook.NewDispatcher(context.Background(), repo))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+15557654321","body":"hello"}`))
+	req = req.WithContext(context.WithValue(req.Context(), contextKeyAPIKey, key))
+	handler.HandleSendSMS(httptest.NewRecorder(), req)
+
+	if counted, err := repo.GetAPIKeyByKey("key-value"); err != nil || counted.SentCount != 0 {
+		t.Errorf("key sent_count = %+v (err %v), want 0", counted, err)
 	}
 }

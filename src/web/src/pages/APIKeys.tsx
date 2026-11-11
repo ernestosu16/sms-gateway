@@ -32,6 +32,7 @@ interface APIKey {
   label: string;
   is_active: boolean;
   is_test: boolean;
+  sent_count: number;
   created_at: string;
 }
 
@@ -151,6 +152,12 @@ export default function APIKeys() {
         ) : (
           <Badge tone="primary">{t('apiKeys.modeLive')}</Badge>
         ),
+    },
+    {
+      key: 'sentCount',
+      header: t('apiKeys.sentCount'),
+      className: 'whitespace-nowrap text-fg-muted tabular-nums',
+      cell: (k) => k.sent_count.toLocaleString(),
     },
     {
       key: 'created',

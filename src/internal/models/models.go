@@ -51,7 +51,10 @@ type APIKey struct {
 	IsActive bool   `json:"is_active"`
 	// IsTest marks a test key: it reads like any other key, but an SMS it
 	// sends is simulated and never reaches the modem. Fixed at creation.
-	IsTest    bool      `json:"is_test"`
+	IsTest bool `json:"is_test"`
+	// SentCount is how many SMS the key has sent, simulated sends included.
+	// Failed sends are not counted, and deleting messages does not lower it.
+	SentCount int       `json:"sent_count"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

@@ -312,6 +312,16 @@ func (r *Repository) HashLegacyAPIKeys() (int, error) {
 	return len(legacy), nil
 }
 
+// IncrementAPIKeySentCount records one more SMS sent with the API key. The
+// increment happens in the database so concurrent sends cannot lose a count.
+// updated_at is left alone: it tracks changes to the key, not its use.
+func (r *Repository) IncrementAPIKeySentCount(id string) error {
+	if _, err := r.db.Exec(`UPDATE api_keys SET sent_count = sent_count + 1 WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("incrementing API key sent count: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) getAPIKeyByID(id string) (*models.APIKey, error) {
 	row := r.db.QueryRow(`SELECT `+apiKeyColumns+` FROM api_keys WHERE id = ?`, id)
 	return scanAPIKey(row)
@@ -319,7 +329,7 @@ func (r *Repository) getAPIKeyByID(id string) (*models.APIKey, error) {
 
 // apiKeyColumns is the column list shared by every API key SELECT. The stored
 // key is a hash, so it is never selected.
-const apiKeyColumns = `id, label, user_id, is_active, is_test, created_at, updated_at`
+const apiKeyColumns = `id, label, user_id, is_active, is_test, sent_count, created_at, updated_at`
 
 // ListAPIKeys returns API keys newest first, limited according to opts.
 func (r *Repository) ListAPIKeys(opts ListOptions) ([]models.APIKey, error) {
@@ -1025,7 +1035,7 @@ func scanAPIKey(s scannable) (*models.APIKey, error) {
 	var k models.APIKey
 	var isActive, isTest int
 	var createdAt, updatedAt string
-	err := s.Scan(&k.ID, &k.Label, &k.UserID, &isActive, &isTest, &createdAt, &updatedAt)
+	err := s.Scan(&k.ID, &k.Label, &k.UserID, &isActive, &isTest, &k.SentCount, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scanning API key: %w", err)
 	}

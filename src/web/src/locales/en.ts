@@ -269,6 +269,7 @@ const en = {
   'apiKeys.empty': 'No API keys found.',
   'apiKeys.items': 'API keys',
   'apiKeys.mode': 'Mode',
+  'apiKeys.sentCount': 'Messages sent',
   'apiKeys.modeLive': 'Live',
   'apiKeys.modeTest': 'Test',
   'apiKeys.modeTestHint':
