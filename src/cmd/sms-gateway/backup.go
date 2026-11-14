@@ -31,7 +31,8 @@ With PostgreSQL only the config is archived; back up the database with pg_dump.`
 		Example: `  sms-gateway backup
   sms-gateway backup -o /var/backups/sms-gateway.tar.gz
   docker exec sms-gateway sms-gateway backup -o - > sms-gateway-backup.tar.gz`,
-		Args: cobra.NoArgs,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			output, _ := cmd.Flags().GetString("output")
 			now := time.Now()
@@ -140,7 +141,8 @@ files are only replaced with --force; the previous ones are kept next to them
 with a .pre-restore-<date> suffix. Use "-" to read the archive from stdin.`,
 		Example: `  sms-gateway restore --force sms-gateway-backup.tar.gz
   sms-gateway restore --force --skip-config - < sms-gateway-backup.tar.gz`,
-		Args: cobra.ExactArgs(1),
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			force, _ := cmd.Flags().GetBool("force")
 			skipConfig, _ := cmd.Flags().GetBool("skip-config")

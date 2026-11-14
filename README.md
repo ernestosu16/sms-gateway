@@ -25,6 +25,7 @@ A self-hosted SMS gateway that provides a WebUI and REST API for sending and rec
 - [OpenClaw Integration](#openclaw-integration)
 - [Configuration](#configuration)
 - [CLI Commands](#cli-commands)
+- [Backup and migration](#backup-and-migration)
 - [API](#api)
 - [Webhooks](#webhooks)
 - [Development](#development)
@@ -453,7 +454,49 @@ sms-gateway user create --username alice --password secret --admin
 sms-gateway apikey create --label "my-app" --user-id <uuid>
 sms-gateway apikey list
 sms-gateway apikey revoke --id <uuid>
+
+# Backup and restore (see Backup and migration)
+sms-gateway backup [-o FILE|-]
+sms-gateway restore [--force] [--skip-config] FILE|-
 ```
+
+## Backup and migration
+
+`sms-gateway backup` writes a `.tar.gz` with everything needed to move the gateway to another server:
+
+- `sms-gateway.db`: a consistent snapshot of the SQLite database (users, API keys, messages, contacts, webhooks, settings). It is safe to take while the server is running.
+- `sms-gateway.conf`: the config file. When there is none (Docker), one is generated from the settings in effect, including `JWT_SECRET`.
+- `manifest.json`: the app version and date of the backup.
+
+The archive holds secrets, so keep it private. `-o -` writes it to stdout.
+
+`sms-gateway restore` puts the database at `--db-dsn` and the config at `--config-file`. Stop the server first. Existing files are only replaced with `--force`, and the old ones are kept next to them with a `.pre-restore-<date>` suffix. Use `--skip-config` to keep the new server's config (for example when its modem has another `DEVICE_PATH`). On startup the server applies any pending migrations, so a backup from an older version restores fine.
+
+Systemd:
+
+```bash
+# Old server
+sudo -u sms-gateway /opt/sms-gateway/sms-gateway backup -o - > sms-gateway-backup.tar.gz
+
+# New server, after running install.sh
+sudo systemctl stop sms-gateway
+sudo -u sms-gateway /opt/sms-gateway/sms-gateway restore --force - < sms-gateway-backup.tar.gz
+sudo systemctl start sms-gateway
+```
+
+Docker Compose:
+
+```bash
+# Old server
+docker exec sms-gateway sms-gateway backup -o - > sms-gateway-backup.tar.gz
+
+# New server, from the directory with docker-compose.yml and .env
+docker compose stop sms-gateway
+docker compose run --rm -T --no-deps sms-gateway restore --force - < sms-gateway-backup.tar.gz
+docker compose start sms-gateway
+```
+
+With Docker, also copy the `.env` file, or take `JWT_SECRET` from the `sms-gateway.conf` inside the backup. With PostgreSQL only the config is archived; back up the database with `pg_dump`.
 
 ## API
 
