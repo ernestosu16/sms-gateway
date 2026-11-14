@@ -83,6 +83,8 @@ func main() {
 	rootCmd.AddCommand(migrateCmd())
 	rootCmd.AddCommand(userCmd())
 	rootCmd.AddCommand(apikeyCmd())
+	rootCmd.AddCommand(backupCmd())
+	rootCmd.AddCommand(restoreCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
