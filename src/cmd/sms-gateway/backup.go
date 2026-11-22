@@ -152,7 +152,7 @@ with a .pre-restore-<date> suffix. Use "-" to read the archive from stdin.`,
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			var in io.Reader = cmd.InOrStdin()
+			in := cmd.InOrStdin()
 			if args[0] != "-" {
 				f, err := os.Open(args[0])
 				if err != nil {
