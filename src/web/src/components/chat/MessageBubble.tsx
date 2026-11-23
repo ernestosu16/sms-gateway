@@ -30,6 +30,14 @@ function StatusIndicator({ status }: { status: string }) {
       </span>
     );
   }
+  if (status === 'queued') {
+    return (
+      <span title={t('status.queued')} className="inline-flex">
+        <ClockIcon className="h-3.5 w-3.5" />
+        <span className="sr-only">{t('status.queued')}</span>
+      </span>
+    );
+  }
   if (status === 'sent') {
     return (
       <span title={t('status.sent')} className="inline-flex">
@@ -43,6 +51,7 @@ function StatusIndicator({ status }: { status: string }) {
 
 const STATUS_LABELS: Record<string, MessageKey> = {
   pending: 'status.pending',
+  queued: 'status.queued',
   sending: 'status.sending',
   sent: 'status.sent',
   failed: 'status.failed',
@@ -151,6 +160,13 @@ export default function MessageBubble({
           {outbound && <StatusIndicator status={message.status} />}
         </button>
       </div>
+
+      {outbound && message.status === 'queued' && (
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-warning">
+          <ClockIcon className="h-4 w-4 shrink-0" />
+          <span>{t('bubble.queued')}</span>
+        </div>
+      )}
 
       {failed && (
         <div className="mt-1 flex items-center gap-1.5 text-xs text-danger">

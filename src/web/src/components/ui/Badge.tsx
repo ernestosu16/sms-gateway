@@ -41,6 +41,7 @@ export function Badge({ tone = 'neutral', dot = false, className, children }: Ba
 // Every message status the server emits, in one place for all views.
 const MESSAGE_STATUS: Record<string, { tone: Tone; label: MessageKey }> = {
   pending: { tone: 'warning', label: 'status.pending' },
+  queued: { tone: 'warning', label: 'status.queued' },
   sending: { tone: 'primary', label: 'status.sending' },
   sent: { tone: 'success', label: 'status.sent' },
   failed: { tone: 'danger', label: 'status.failed' },

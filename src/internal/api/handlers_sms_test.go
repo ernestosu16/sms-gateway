@@ -16,6 +16,7 @@ import (
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/outbox"
 	"github.com/mattboston/sms-gateway/internal/webhook"
 	"github.com/mattboston/sms-gateway/internal/webhook/webhooktest"
 )
@@ -27,8 +28,18 @@ import (
 func newSMSTestHandler(t *testing.T) (*SMSHandler, *database.Repository) {
 	t.Helper()
 
+	h, repo, _ := newSMSTestHandlerWithModem(t)
+	return h, repo
+}
+
+// newSMSTestHandlerWithModem is newSMSTestHandler that also returns the mock
+// modem, so tests can check what reached it.
+func newSMSTestHandlerWithModem(t *testing.T) (*SMSHandler, *database.Repository, *modem.MockModem) {
+	t.Helper()
+
 	repo := webhooktest.NewRepository(t)
-	return NewSMSHandler(repo, modem.NewMockModem(), webhook.NewDispatcher(context.Background(), repo)), repo
+	m := modem.NewMockModem()
+	return NewSMSHandler(repo, outbox.New(repo, m, webhook.NewDispatcher(context.Background(), repo), 0)), repo, m
 }
 
 func seedMessages(t *testing.T, repo *database.Repository, direction models.Direction, status models.MessageStatus, n int) {
@@ -305,7 +316,7 @@ func TestHandleSendSMS_NotifiesWebhooks(t *testing.T) {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
-			handler := NewSMSHandler(repo, tt.modem, webhook.NewDispatcher(ctx, repo))
+			handler := NewSMSHandler(repo, outbox.New(repo, tt.modem, webhook.NewDispatcher(ctx, repo), 0))
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+15557654321","body":"hello"}`))
 			req = req.WithContext(context.WithValue(req.Context(), contextKeyAPIKey, key))
@@ -362,8 +373,7 @@ func TestHandleSendSMSRejectsATInjection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h, repo := newSMSTestHandler(t)
-			mock := h.modem.(*modem.MockModem)
+			h, repo, mock := newSMSTestHandlerWithModem(t)
 
 			payload, err := json.Marshal(models.SendSMSRequest{To: tt.to, Body: tt.body})
 			if err != nil {
@@ -414,7 +424,7 @@ func TestHandleSendSMS_TestKeySimulates(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
 			mock := modem.NewMockModem()
-			handler := NewSMSHandler(repo, mock, webhook.NewDispatcher(ctx, repo))
+			handler := NewSMSHandler(repo, outbox.New(repo, mock, webhook.NewDispatcher(ctx, repo), 0))
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+15557654321","body":"hello"}`))
 			req = req.WithContext(context.WithValue(req.Context(), contextKeyAPIKey, key))
@@ -487,7 +497,7 @@ func TestHandleSendSMS_FailedSendIsNotCounted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateAPIKey() error = %v", err)
 	}
-	handler := NewSMSHandler(repo, failingModem{modem.NewMockModem()}, webhook.NewDispatcher(context.Background(), repo))
+	handler := NewSMSHandler(repo, outbox.New(repo, failingModem{modem.NewMockModem()}, webhook.NewDispatcher(context.Background(), repo), 0))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+15557654321","body":"hello"}`))
 	req = req.WithContext(context.WithValue(req.Context(), contextKeyAPIKey, key))
@@ -496,4 +506,46 @@ func TestHandleSendSMS_FailedSendIsNotCounted(t *testing.T) {
 	if counted, err := repo.GetAPIKeyByKey("key-value"); err != nil || counted.SentCount != 0 {
 		t.Errorf("key sent_count = %+v (err %v), want 0", counted, err)
 	}
+}
+
+// unpluggedModem has no device connected, as when the modem is unplugged or
+// powered off.
+type unpluggedModem struct{ *modem.MockModem }
+
+func (unpluggedModem) SendSMS(_, _ string) error { return modem.ErrNotConnected }
+func (unpluggedModem) CheckStatus() error        { return modem.ErrNotConnected }
+
+// TestHandleSendSMS_QueuesWhileModemUnavailable checks a send that finds the
+// modem down is accepted with 202 and kept queued, and that no webhook fires
+// until the message is actually sent or expires.
+func TestHandleSendSMS_QueuesWhileModemUnavailable(t *testing.T) {
+	repo := webhooktest.NewRepository(t)
+	receiver := webhooktest.NewReceiver(t)
+	events := []models.WebhookEvent{models.EventMessageSent, models.EventMessageFailed}
+	if _, err := repo.CreateWebhook("test", receiver.URL, "whsec_test_secret_value", events, true); err != nil {
+		t.Fatalf("CreateWebhook() error = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	handler := NewSMSHandler(repo, outbox.New(repo, unpluggedModem{modem.NewMockModem()}, webhook.NewDispatcher(ctx, repo), 0))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sms/send", strings.NewReader(`{"to":"+15557654321","body":"hello"}`))
+	w := httptest.NewRecorder()
+	handler.HandleSendSMS(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusAccepted)
+	}
+	var resp models.SendSMSResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if resp.Status != models.StatusQueued {
+		t.Errorf("response status = %q, want queued", resp.Status)
+	}
+	stored, err := repo.GetMessage(resp.ID)
+	if err != nil || stored.Status != models.StatusQueued {
+		t.Errorf("stored message = %+v (err %v), want queued", stored, err)
+	}
+	receiver.ExpectNone(t, 200*time.Millisecond)
 }

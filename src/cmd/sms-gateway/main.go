@@ -40,6 +40,7 @@ import (
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/outbox"
 	"github.com/mattboston/sms-gateway/internal/webhook"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -61,6 +62,7 @@ func main() {
 	rootCmd.PersistentFlags().Int("port", 5174, "HTTP server port")
 	rootCmd.PersistentFlags().Bool("dev-mode", false, "Enable development mode (mock modem, CORS)")
 	rootCmd.PersistentFlags().String("jwt-secret", "", "JWT signing secret")
+	rootCmd.PersistentFlags().Duration("queue-max-age", outbox.DefaultMaxAge, "How long an SMS waits for an unavailable modem before it fails (0 waits forever)")
 	rootCmd.PersistentFlags().String("config-file", "/opt/sms-gateway/sms-gateway.conf", "Path to config file")
 
 	mustBindPFlag := func(key, flag string) {
@@ -77,6 +79,7 @@ func main() {
 	mustBindPFlag("port", "port")
 	mustBindPFlag("dev_mode", "dev-mode")
 	mustBindPFlag("jwt_secret", "jwt-secret")
+	mustBindPFlag("queue_max_age", "queue-max-age")
 	mustBindPFlag("config_file", "config-file")
 
 	rootCmd.AddCommand(serveCmd())
@@ -158,8 +161,13 @@ func serveCmd() *cobra.Command {
 
 			m.StartReceiver(ctx, receiveSMS(repo, webhooks))
 
+			// Outbound SMS that find the modem unavailable wait here, in the
+			// database, and go out once it answers again.
+			ob := outbox.New(repo, m, webhooks, cfg.QueueMaxAge)
+			go ob.Run(ctx)
+
 			// Build router.
-			router := api.NewRouter(repo, m, webhooks, cfg)
+			router := api.NewRouter(repo, m, ob, cfg)
 
 			// Start HTTP server.
 			addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

@@ -1466,7 +1466,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy. A test API key simulates the send: the message is validated, stored and reported to webhooks as sent with simulated=true, but never reaches the modem.",
+                "description": "Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy. If the modem is unavailable (unplugged, powered off or not responding) the message is queued instead: the response is 202 with status \"queued\", and the message is sent in order once the modem is back, firing message.sent (or message.failed if it expires in the queue, after 24h by default). A test API key simulates the send: the message is validated, stored and reported to webhooks as sent with simulated=true, but never reaches the modem.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1490,7 +1490,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Sent, or failed because the modem rejected it",
+                        "schema": {
+                            "$ref": "#/definitions/models.SendSMSResponse"
+                        }
+                    },
+                    "202": {
+                        "description": "Queued until the modem is available",
                         "schema": {
                             "$ref": "#/definitions/models.SendSMSResponse"
                         }
@@ -2619,6 +2625,7 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "pending",
+                "queued",
                 "sending",
                 "sent",
                 "failed",
@@ -2627,6 +2634,7 @@ const docTemplate = `{
             ],
             "x-enum-varnames": [
                 "StatusPending",
+                "StatusQueued",
                 "StatusSending",
                 "StatusSent",
                 "StatusFailed",

@@ -92,6 +92,7 @@ const es: Record<MessageKey, string> = {
 
   // Message status
   'status.pending': 'Pendiente',
+  'status.queued': 'En cola',
   'status.sending': 'Enviando',
   'status.sent': 'Enviado',
   'status.failed': 'Fallido',
@@ -143,6 +144,8 @@ const es: Record<MessageKey, string> = {
   'dashboard.placeholder': 'Escribe tu mensaje…',
   'dashboard.send': 'Enviar SMS',
   'dashboard.sent': 'Mensaje enviado correctamente.',
+  'dashboard.queued':
+    'El módem no está disponible. El mensaje quedó en cola y se enviará cuando el módem vuelva.',
   'dashboard.recent': 'Mensajes recientes',
   'dashboard.noMessages': 'Aún no hay mensajes',
   'quality.excellent': 'excelente',
@@ -184,6 +187,7 @@ const es: Record<MessageKey, string> = {
   'composer.counter': 'quedan {remaining} · {segments} SMS',
   'bubble.details': 'Detalles del mensaje, {time}',
   'bubble.notSent': 'No enviado',
+  'bubble.queued': 'En cola hasta que vuelva el módem',
   'bubble.retry': 'Reintentar',
   'bubble.id': 'ID',
   'bubble.error': 'Error',

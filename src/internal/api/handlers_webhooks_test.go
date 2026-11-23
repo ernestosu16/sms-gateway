@@ -14,6 +14,7 @@ import (
 	"github.com/mattboston/sms-gateway/internal/config"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/outbox"
 	"github.com/mattboston/sms-gateway/internal/webhook"
 )
 
@@ -196,7 +197,8 @@ func TestHandleListWebhooks_Pagination(t *testing.T) {
 func TestWebhookRoutes_RequireAdmin(t *testing.T) {
 	repo := newListTestRepo(t)
 	cfg := &config.Config{JWTSecret: "test-secret"}
-	router := NewRouter(repo, modem.NewMockModem(), webhook.NewDispatcher(context.Background(), repo), cfg)
+	m := modem.NewMockModem()
+	router := NewRouter(repo, m, outbox.New(repo, m, webhook.NewDispatcher(context.Background(), repo), 0), cfg)
 
 	tests := []struct {
 		name    string

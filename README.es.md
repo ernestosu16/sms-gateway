@@ -437,6 +437,7 @@ La configuración se hace mediante un archivo de configuración, opciones de la 
 | `--device-path` | `DEVICE_PATH` | | Ruta del dispositivo serie (por ejemplo, `/dev/ttyUSB0`) |
 | `--baud-rate` | `BAUD_RATE` | `9600` | Velocidad en baudios |
 | `--jwt-secret` | `JWT_SECRET` | (obligatorio) | Secreto para firmar JWT, de al menos 32 caracteres. En modo desarrollo se genera uno aleatorio si no se define |
+| `--queue-max-age` | `QUEUE_MAX_AGE` | `24h` | Cuánto espera un SMS saliente a que el módem esté disponible antes de marcarse como fallido (`0` espera sin límite) |
 | `--dev-mode` | `DEV_MODE` | `false` | Activa el modo desarrollo (módem simulado, CORS) |
 
 Hay un archivo de configuración de ejemplo en [`deploy/systemd/sms-gateway.conf`](deploy/systemd/sms-gateway.conf).
@@ -524,6 +525,8 @@ curl -X POST http://localhost:5174/api/v1/sms/send \
 
 `to` debe ser un número internacional con `+` y código de país (se ignoran espacios, guiones, puntos y paréntesis) o un código corto de 3 a 6 dígitos; cualquier otro número se rechaza con `400`. `body` admite hasta 918 caracteres y se divide automáticamente en partes concatenadas.
 
+La respuesta es `200` con `status` `sent`, o `failed` si el módem rechaza el mensaje (por ejemplo, `+CMS ERROR`). Si el módem no está disponible (desconectado, apagado o sin responder), el mensaje no se pierde: la respuesta es `202` con `status` `queued`. Los mensajes en cola se guardan en la base de datos, sobreviven a reinicios y se envían en orden en cuanto el módem vuelve a responder, disparando `message.sent`. Un mensaje que sigue en cola pasado `--queue-max-age` (24 horas por defecto) se marca `failed` y dispara `message.failed`. Para cancelar un mensaje en cola, bórralo.
+
 ### Endpoints
 
 | Método | Ruta | Autenticación | Descripción |
@@ -590,8 +593,8 @@ Cada webhook tiene:
 | Evento | Se dispara cuando |
 |--------|-------------------|
 | `message.received` | Se recibe y guarda un SMS entrante |
-| `message.sent` | El módem acepta un SMS saliente |
-| `message.failed` | El módem rechaza un SMS saliente |
+| `message.sent` | El módem acepta un SMS saliente, incluido uno en cola que sale cuando el módem vuelve |
+| `message.failed` | El módem rechaza un SMS saliente, o uno en cola caduca antes de que el módem vuelva |
 
 ### Contenido
 

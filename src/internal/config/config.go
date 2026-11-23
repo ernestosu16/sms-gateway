@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -25,6 +26,9 @@ type Config struct {
 	Port       int    `mapstructure:"port"`
 	DevMode    bool   `mapstructure:"dev_mode"`
 	JWTSecret  string `mapstructure:"jwt_secret"`
+	// QueueMaxAge is how long an outbound SMS waits in the queue for an
+	// unavailable modem before it is marked failed. Zero waits forever.
+	QueueMaxAge time.Duration `mapstructure:"queue_max_age"`
 }
 
 // Load reads configuration from the global viper instance (which has CLI flags bound)
@@ -38,6 +42,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("port", 5174)
 	viper.SetDefault("dev_mode", false)
 	viper.SetDefault("jwt_secret", "")
+	viper.SetDefault("queue_max_age", 24*time.Hour)
 	viper.SetDefault("config_file", "/opt/sms-gateway/sms-gateway.conf")
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
