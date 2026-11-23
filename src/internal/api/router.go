@@ -17,14 +17,14 @@ import (
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
-	"github.com/mattboston/sms-gateway/internal/webhook"
+	"github.com/mattboston/sms-gateway/internal/outbox"
 	httpSwagger "github.com/swaggo/http-swagger"
 
 	_ "github.com/mattboston/sms-gateway/docs" // register swagger docs
 )
 
 // NewRouter creates and configures the chi router with all middleware and routes.
-func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispatcher, cfg *config.Config) chi.Router {
+func NewRouter(repo *database.Repository, m modem.Modem, ob *outbox.Outbox, cfg *config.Config) chi.Router {
 	r := chi.NewRouter()
 
 	// Standard middleware.
@@ -49,7 +49,7 @@ func NewRouter(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispa
 
 	// Handlers.
 	authHandler := NewAuthHandler(repo, cfg.JWTSecret)
-	smsHandler := NewSMSHandler(repo, m, webhooks)
+	smsHandler := NewSMSHandler(repo, ob)
 	apiKeyHandler := NewKeyHandler(repo)
 	modemHandler := NewModemHandler(m)
 	modemProfileHandler := NewModemProfileHandler(repo)

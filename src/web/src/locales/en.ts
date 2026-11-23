@@ -93,6 +93,7 @@ const en = {
 
   // Message status
   'status.pending': 'Pending',
+  'status.queued': 'Queued',
   'status.sending': 'Sending',
   'status.sent': 'Sent',
   'status.failed': 'Failed',
@@ -144,6 +145,8 @@ const en = {
   'dashboard.placeholder': 'Type your message…',
   'dashboard.send': 'Send SMS',
   'dashboard.sent': 'Message sent successfully.',
+  'dashboard.queued':
+    'The modem is unavailable. The message is queued and will be sent when the modem is back.',
   'dashboard.recent': 'Recent Messages',
   'dashboard.noMessages': 'No messages yet',
   'quality.excellent': 'excellent',
@@ -185,6 +188,7 @@ const en = {
   'composer.counter': '{remaining} left · {segments} SMS',
   'bubble.details': 'Message details, {time}',
   'bubble.notSent': 'Not sent',
+  'bubble.queued': 'Queued until the modem is back',
   'bubble.retry': 'Retry',
   'bubble.id': 'ID',
   'bubble.error': 'Error',

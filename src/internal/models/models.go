@@ -21,7 +21,11 @@ const (
 type MessageStatus string
 
 const (
-	StatusPending  MessageStatus = "pending"
+	StatusPending MessageStatus = "pending"
+	// StatusQueued is an outbound message waiting for the modem to come back:
+	// it could not be handed over because the modem was unavailable, and is
+	// sent automatically once the modem answers again.
+	StatusQueued   MessageStatus = "queued"
 	StatusSending  MessageStatus = "sending"
 	StatusSent     MessageStatus = "sent"
 	StatusFailed   MessageStatus = "failed"
@@ -82,9 +86,11 @@ type WebhookEvent string
 const (
 	// EventMessageReceived fires when an inbound SMS is stored.
 	EventMessageReceived WebhookEvent = "message.received"
-	// EventMessageSent fires when the modem accepts an outbound SMS.
+	// EventMessageSent fires when the modem accepts an outbound SMS, including
+	// a queued one sent after the modem comes back.
 	EventMessageSent WebhookEvent = "message.sent"
-	// EventMessageFailed fires when the modem rejects an outbound SMS.
+	// EventMessageFailed fires when the modem rejects an outbound SMS, or when
+	// a queued SMS expires before the modem comes back.
 	EventMessageFailed WebhookEvent = "message.failed"
 )
 

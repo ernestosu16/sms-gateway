@@ -558,7 +558,7 @@ func (r *Repository) MessageStats() (*models.MessageStats, error) {
 			switch models.MessageStatus(status) {
 			case models.StatusSent:
 				stats.Sent += count
-			case models.StatusPending, models.StatusSending:
+			case models.StatusPending, models.StatusQueued, models.StatusSending:
 				stats.Pending += count
 			case models.StatusFailed:
 				stats.Failed += count
@@ -641,6 +641,38 @@ func (r *Repository) DeleteMessage(id string) error {
 func (r *Repository) GetPendingMessages() ([]models.Message, error) {
 	status := models.StatusPending
 	return r.ListMessages(models.DirectionOutbound, &status, ListOptions{})
+}
+
+// QueueMessage marks an outbound message as queued until the modem is back,
+// recording reason (nil for none) as its error. A message joins the end of the
+// queue; one already queued keeps its place.
+func (r *Repository) QueueMessage(id string, reason *string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.Exec(
+		`UPDATE messages SET status = ?, error_message = ?, updated_at = ?,
+		 queue_seq = COALESCE(queue_seq, (SELECT COALESCE(MAX(queue_seq), 0) + 1 FROM messages))
+		 WHERE id = ?`,
+		string(models.StatusQueued), reason, now, id,
+	)
+	if err != nil {
+		return fmt.Errorf("queueing message: %w", err)
+	}
+	return nil
+}
+
+// NextQueuedMessage returns the message at the front of the send queue, or nil
+// when the queue is empty.
+func (r *Repository) NextQueuedMessage() (*models.Message, error) {
+	row := r.db.QueryRow(
+		`SELECT `+messageColumns+` FROM messages WHERE direction = ? AND status = ?
+		 ORDER BY queue_seq ASC, created_at ASC, id ASC LIMIT 1`,
+		string(models.DirectionOutbound), string(models.StatusQueued),
+	)
+	m, err := scanMessage(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return m, err
 }
 
 // --- Conversations ---

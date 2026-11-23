@@ -99,7 +99,7 @@ export default function Dashboard() {
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{
-    type: 'success' | 'error';
+    type: 'success' | 'warning' | 'error';
     message: string;
   } | null>(null);
 
@@ -152,6 +152,11 @@ export default function Dashboard() {
       const res = await api.post('/sms/send', { to, body });
       if (res.data.status === 'sent') {
         setSendResult({ type: 'success', message: t('dashboard.sent') });
+        setTo('');
+        setBody('');
+        notifyConversationsChanged();
+      } else if (res.data.status === 'queued') {
+        setSendResult({ type: 'warning', message: t('dashboard.queued') });
         setTo('');
         setBody('');
         notifyConversationsChanged();
@@ -265,7 +270,7 @@ export default function Dashboard() {
           <CardBody>
             <form onSubmit={handleQuickSend} className="space-y-4">
               {sendResult && (
-                <Alert tone={sendResult.type === 'success' ? 'success' : 'danger'}>
+                <Alert tone={sendResult.type === 'error' ? 'danger' : sendResult.type}>
                   {sendResult.message}
                 </Alert>
               )}

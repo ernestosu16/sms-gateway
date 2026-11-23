@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
-	"github.com/mattboston/sms-gateway/internal/webhook"
+	"github.com/mattboston/sms-gateway/internal/outbox"
 )
 
 // maxPageSize caps how many messages a single request may return. Values above
@@ -21,9 +20,8 @@ const maxPageSize = 500
 
 // SMSHandler handles SMS-related endpoints.
 type SMSHandler struct {
-	repo     *database.Repository
-	modem    modem.Modem
-	webhooks *webhook.Dispatcher
+	repo   *database.Repository
+	outbox *outbox.Outbox
 }
 
 // parseListOptions reads the limit and offset query parameters.
@@ -73,19 +71,20 @@ func writePage[T any](w http.ResponseWriter, items []T, total int) {
 }
 
 // NewSMSHandler creates a new SMSHandler.
-func NewSMSHandler(repo *database.Repository, m modem.Modem, webhooks *webhook.Dispatcher) *SMSHandler {
-	return &SMSHandler{repo: repo, modem: m, webhooks: webhooks}
+func NewSMSHandler(repo *database.Repository, ob *outbox.Outbox) *SMSHandler {
+	return &SMSHandler{repo: repo, outbox: ob}
 }
 
 // HandleSendSMS sends an SMS message.
 //
 // @Summary      Send SMS
-// @Description  Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy. A test API key simulates the send: the message is validated, stored and reported to webhooks as sent with simulated=true, but never reaches the modem.
+// @Description  Sends an SMS message to the specified phone number via the GSM modem. The destination must be allowed by the send country policy. If the modem is unavailable (unplugged, powered off or not responding) the message is queued instead: the response is 202 with status "queued", and the message is sent in order once the modem is back, firing message.sent (or message.failed if it expires in the queue, after 24h by default). A test API key simulates the send: the message is validated, stored and reported to webhooks as sent with simulated=true, but never reaches the modem.
 // @Tags         SMS
 // @Accept       json
 // @Produce      json
 // @Param        request  body      models.SendSMSRequest   true  "SMS message to send"
-// @Success      200      {object}  models.SendSMSResponse
+// @Success      200      {object}  models.SendSMSResponse  "Sent, or failed because the modem rejected it"
+// @Success      202      {object}  models.SendSMSResponse  "Queued until the modem is available"
 // @Failure      400      {object}  models.ErrorResponse
 // @Failure      403      {object}  models.ErrorResponse  "Destination country not allowed by the send policy"
 // @Failure      500      {object}  models.ErrorResponse
@@ -141,9 +140,7 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 
 	// A simulated send must never reach the modem, connected or not.
 	if simulated {
-		_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusSent, nil, nil)
-		h.countSent(apiKeyID)
-		h.notify(models.EventMessageSent, msg.ID)
+		h.outbox.Simulate(msg)
 		writeJSON(w, http.StatusOK, models.SendSMSResponse{
 			ID:        msg.ID,
 			Status:    models.StatusSent,
@@ -153,50 +150,27 @@ func (h *SMSHandler) HandleSendSMS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Attempt to send via modem.
-	if err := h.modem.SendSMS(req.To, req.Body); err != nil {
-		errStr := err.Error()
-		_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusFailed, nil, &errStr)
-		h.notify(models.EventMessageFailed, msg.ID)
+	res := h.outbox.Send(msg)
+	switch res.Status {
+	case models.StatusSent:
+		writeJSON(w, http.StatusOK, models.SendSMSResponse{
+			ID:      msg.ID,
+			Status:  models.StatusSent,
+			Message: "message sent",
+		})
+	case models.StatusQueued:
+		writeJSON(w, http.StatusAccepted, models.SendSMSResponse{
+			ID:      msg.ID,
+			Status:  models.StatusQueued,
+			Message: "modem unavailable, message queued; it is sent when the modem is back",
+		})
+	default:
 		writeJSON(w, http.StatusOK, models.SendSMSResponse{
 			ID:      msg.ID,
 			Status:  models.StatusFailed,
-			Message: "failed to send: " + errStr,
+			Message: "failed to send: " + res.Error,
 		})
-		return
 	}
-
-	_ = h.repo.UpdateMessageStatus(msg.ID, models.StatusSent, nil, nil)
-	h.countSent(apiKeyID)
-	h.notify(models.EventMessageSent, msg.ID)
-
-	writeJSON(w, http.StatusOK, models.SendSMSResponse{
-		ID:      msg.ID,
-		Status:  models.StatusSent,
-		Message: "message sent",
-	})
-}
-
-// countSent adds a sent message to the usage counter of the API key that sent
-// it, if any. The message is already out, so a failure here is only logged.
-func (h *SMSHandler) countSent(apiKeyID *string) {
-	if apiKeyID == nil {
-		return
-	}
-	if err := h.repo.IncrementAPIKeySentCount(*apiKeyID); err != nil {
-		log.Printf("api keys: counting sent message for key %s: %v", *apiKeyID, err)
-	}
-}
-
-// notify sends event to webhooks with the message as stored after its final
-// status update, so the payload carries the status and error the event reports.
-func (h *SMSHandler) notify(event models.WebhookEvent, messageID string) {
-	msg, err := h.repo.GetMessage(messageID)
-	if err != nil {
-		log.Printf("webhooks: loading message %s for %s: %v", messageID, event, err)
-		return
-	}
-	h.webhooks.Dispatch(event, msg)
 }
 
 // HandleGetInbox returns inbound messages.

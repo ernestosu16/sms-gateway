@@ -13,6 +13,7 @@ import (
 	"github.com/mattboston/sms-gateway/internal/database"
 	"github.com/mattboston/sms-gateway/internal/models"
 	"github.com/mattboston/sms-gateway/internal/modem"
+	"github.com/mattboston/sms-gateway/internal/outbox"
 	"github.com/mattboston/sms-gateway/internal/webhook"
 )
 
@@ -22,7 +23,8 @@ func newAuthTestRouter(t *testing.T) (http.Handler, *database.Repository) {
 	t.Helper()
 	repo := newListTestRepo(t)
 	webhooks := webhook.NewDispatcher(t.Context(), repo)
-	return NewRouter(repo, modem.NewMockModem(), webhooks, &config.Config{JWTSecret: testJWTSecret}), repo
+	m := modem.NewMockModem()
+	return NewRouter(repo, m, outbox.New(repo, m, webhooks, 0), &config.Config{JWTSecret: testJWTSecret}), repo
 }
 
 func createTestUser(t *testing.T, repo *database.Repository, username, password string, isAdmin, mustChange bool) *models.User {

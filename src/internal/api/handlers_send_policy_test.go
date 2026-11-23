@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/mattboston/sms-gateway/internal/models"
-	"github.com/mattboston/sms-gateway/internal/modem"
 	"github.com/mattboston/sms-gateway/internal/webhook/webhooktest"
 )
 
@@ -75,8 +74,7 @@ func TestHandleUpdateSendPolicy(t *testing.T) {
 // TestHandleSendSMS_EnforcesSendPolicy checks a blocked destination is refused
 // before anything is stored or handed to the modem.
 func TestHandleSendSMS_EnforcesSendPolicy(t *testing.T) {
-	h, repo := newSMSTestHandler(t)
-	mock := h.modem.(*modem.MockModem)
+	h, repo, mock := newSMSTestHandlerWithModem(t)
 	if _, err := repo.SaveSendCountryPolicy(models.SendCountriesSelected, []string{"US"}); err != nil {
 		t.Fatalf("SaveSendCountryPolicy() error = %v", err)
 	}

@@ -432,6 +432,7 @@ Configuration is done via a config file, CLI flags, or environment variables.
 | `--device-path` | `DEVICE_PATH` | | Serial device path (e.g., `/dev/ttyUSB0`) |
 | `--baud-rate` | `BAUD_RATE` | `9600` | Serial baud rate |
 | `--jwt-secret` | `JWT_SECRET` | (required) | JWT signing secret, at least 32 characters. Dev mode generates a random one when unset |
+| `--queue-max-age` | `QUEUE_MAX_AGE` | `24h` | How long an outbound SMS waits for an unavailable modem before it is marked failed (`0` waits forever) |
 | `--dev-mode` | `DEV_MODE` | `false` | Enable dev mode (mock modem, CORS) |
 
 An example config file is in [`deploy/systemd/sms-gateway.conf`](deploy/systemd/sms-gateway.conf).
@@ -519,6 +520,8 @@ curl -X POST http://localhost:5174/api/v1/sms/send \
 
 `to` must be an international number with `+` and country code (spaces, dashes, dots and parentheses are ignored) or a 3-6 digit short code; other numbers are rejected with `400`. `body` can be up to 918 characters and is split into concatenated parts automatically.
 
+The response is `200` with `status` `sent`, or `failed` when the modem rejects the message (for example, `+CMS ERROR`). If the modem is unavailable (unplugged, powered off or not responding), the message is not lost: the response is `202` with `status` `queued`. Queued messages are kept in the database, survive restarts, and are sent in order as soon as the modem answers again, firing `message.sent`. A message still queued after `--queue-max-age` (24 hours by default) is marked `failed` and fires `message.failed`. To cancel a queued message, delete it.
+
 ### Endpoints
 
 | Method | Path | Auth | Description |
@@ -583,8 +586,8 @@ Each webhook has:
 | Event | Fires when |
 |-------|------------|
 | `message.received` | An inbound SMS is received and stored |
-| `message.sent` | The modem accepts an outbound SMS |
-| `message.failed` | The modem rejects an outbound SMS |
+| `message.sent` | The modem accepts an outbound SMS, including a queued one sent once the modem is back |
+| `message.failed` | The modem rejects an outbound SMS, or a queued one expires before the modem is back |
 
 ### Payload
 
